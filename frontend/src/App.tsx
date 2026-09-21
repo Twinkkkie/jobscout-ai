@@ -189,13 +189,35 @@ function App() {
     setScanning(true);
     setError("");
     try {
-      await api("/jobs/scan", { method: "POST" });
-      window.setTimeout(async () => {
-        await refresh();
-        setScanning(false);
-      }, 3500);
+      const queued = await api("/jobs/scan", { method: "POST" });
+      const taskId = queued.task_id;
+      let completed = false;
+
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1000));
+        const state = await api(`/jobs/scan/${taskId}`);
+
+        if (state.status === "success") {
+          completed = true;
+          await refresh();
+          break;
+        }
+
+        if (state.status === "failure") {
+          throw new Error(state.error || "Job scan failed");
+        }
+      }
+
+      if (!completed) {
+        throw new Error(
+          locale === "en"
+            ? "The scan is taking longer than expected. Try Refresh in a moment."
+            : "Поиск занимает больше времени, чем ожидалось. Обнови страницу через минуту."
+        );
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Scan failed");
+    } finally {
       setScanning(false);
     }
   };
