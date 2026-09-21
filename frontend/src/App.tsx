@@ -243,6 +243,23 @@ function App() {
     }
   }, [api, token]);
 
+  const refreshMarket = useCallback(async () => {
+    if (!token) return;
+    const [statsData, matchData, jobsData] = await Promise.all([
+      api("/dashboard/stats"),
+      api("/jobs/matches?limit=200"),
+      api("/jobs?limit=200"),
+    ]);
+    setStats(statsData);
+    setMatches(matchData);
+    setJobs(jobsData);
+  }, [api, token]);
+
+  const refreshStats = useCallback(async () => {
+    if (!token) return;
+    setStats(await api("/dashboard/stats"));
+  }, [api, token]);
+
   useEffect(() => {
     refresh();
   }, [refresh]);
@@ -277,7 +294,7 @@ function App() {
               ? `${newJobs} new vacancies added${closedJobs ? ` · ${closedJobs} closed removed` : ""}${aiTaskId ? " · AI is refining matches in the background" : ""}`
               : `Добавлено новых вакансий: ${newJobs}${closedJobs ? ` · закрытых убрано: ${closedJobs}` : ""}${aiTaskId ? " · AI уточняет мэтчи в фоне" : ""}`
           );
-          await refresh();
+          await refreshMarket();
 
           if (aiTaskId) {
             void (async () => {
@@ -287,7 +304,7 @@ function App() {
                   const aiState = await api(`/jobs/scan/${aiTaskId}`);
                   if (aiState.status === "success") {
                     const aiJobs = Number(aiState.result?.ai_enriched_jobs || 0);
-                    await refresh();
+                    await refreshMarket();
                     setScanNotice(
                       locale === "en"
                         ? `${newJobs} new vacancies added · AI refreshed ${aiJobs} promising vacancies`
@@ -323,7 +340,7 @@ function App() {
             try {
               const state = await api(`/jobs/scan/${taskId}`);
               if (state.status === "success") {
-                await refresh();
+                await refreshMarket();
                 const result = state.result || {};
                 const newJobs = Number(result.new_jobs || 0);
                 setScanNotice(
@@ -401,7 +418,7 @@ function App() {
           });
           setPreparingApplication(null);
           setPrepareStage("");
-          void refresh();
+          void refreshStats();
           return;
         }
 
@@ -556,11 +573,17 @@ function App() {
               applications={applications}
               locale={locale}
               onSave={async (jobId) => {
-                await api(`/applications/${jobId}`, {
+                const saved = await api(`/applications/${jobId}`, {
                   method: "PUT",
                   body: JSON.stringify({ status: "saved", notes: "" }),
+                }) as Application;
+                setApplications(current => {
+                  const exists = current.some(item => item.job.id === jobId);
+                  return exists
+                    ? current.map(item => item.job.id === jobId ? saved : item)
+                    : [saved, ...current];
                 });
-                await refresh();
+                void refreshStats();
               }}
               onScan={scanJobs}
               scanning={scanning}
@@ -612,11 +635,14 @@ function App() {
               locale={locale}
               onPrepare={prepareApplication}
               onApplied={async (jobId) => {
-                await api(`/applications/${jobId}`, {
+                const updated = await api(`/applications/${jobId}`, {
                   method: "PUT",
                   body: JSON.stringify({ status: "applied", notes: "" }),
-                });
-                await refresh();
+                }) as Application;
+                setApplications(current =>
+                  current.map(item => item.job.id === jobId ? updated : item)
+                );
+                void refreshStats();
               }}
             />
           )}
@@ -627,7 +653,8 @@ function App() {
               locale={locale}
               onDeleteSaved={async (jobId) => {
                 await api(`/applications/${jobId}`, { method: "DELETE" });
-                await refresh();
+                setApplications(current => current.filter(item => item.job.id !== jobId));
+                void refreshStats();
               }}
             />
           )}
@@ -662,7 +689,7 @@ function App() {
                       try {
                         const state = await api(`/jobs/scan/${taskId}`);
                         if (state.status === "success") {
-                          await refresh();
+                          await refreshMarket();
                           break;
                         }
                         if (state.status === "failure") break;
