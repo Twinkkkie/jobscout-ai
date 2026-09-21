@@ -399,6 +399,17 @@ function App() {
               matches={matches}
               onScan={scanJobs}
               scanning={scanning}
+              careerInsight={careerInsight}
+              careerLoading={careerLoading}
+              onCareer={async () => {
+                setCareerLoading(true);
+                try {
+                  const insight = await api("/agents/career");
+                  setCareerInsight(insight);
+                } finally {
+                  setCareerLoading(false);
+                }
+              }}
               onPrepare={async (jobId) => {
                 const app = await api(`/applications/${jobId}/prepare`, { method: "POST" });
                 setSelectedApplication(app);
@@ -423,6 +434,17 @@ function App() {
               onScan={scanJobs}
               scanning={scanning}
               scanNotice={scanNotice}
+              onAnalyzeMatch={async (jobId) => {
+                const result = await api(`/jobs/${jobId}/match-analysis`, { method: "POST" });
+                const analyzed = result.match as Match;
+                setMatches(current => {
+                  const exists = current.some(item => item.job.id === analyzed.job.id);
+                  return exists
+                    ? current.map(item => item.job.id === analyzed.job.id ? analyzed : item)
+                    : [analyzed, ...current];
+                });
+                return analyzed;
+              }}
             />
           )}
 
@@ -634,6 +656,9 @@ function DashboardPage({
   matches,
   onScan,
   scanning,
+  careerInsight,
+  careerLoading,
+  onCareer,
   onPrepare,
 }: {
   locale: Locale;
@@ -642,6 +667,9 @@ function DashboardPage({
   matches: Match[];
   onScan: () => void;
   scanning: boolean;
+  careerInsight: CareerInsight | null;
+  careerLoading: boolean;
+  onCareer: () => Promise<void>;
   onPrepare: (jobId: string) => Promise<void>;
 }) {
   const t = messages[locale];
@@ -695,6 +723,35 @@ function DashboardPage({
             <h3>{locale === "en" ? "Today’s focus" : "Фокус на сегодня"}</h3>
             <p>{locale === "en" ? "Review strong matches and send 2 thoughtful applications." : "Посмотри сильные совпадения и отправь 2 качественных отклика."}</p>
             <div className="progress-line"><span style={{ width: "56%" }} /></div>
+          </section>
+          <section className="panel career-card">
+            <Sparkles size={22} />
+            <h3>{locale === "en" ? "Career Agent" : "Career Agent"}</h3>
+            {careerInsight ? (
+              <>
+                <p>{careerInsight.summary}</p>
+                {!!careerInsight.recurring_gaps.length && (
+                  <div className="career-chip-row">
+                    {careerInsight.recurring_gaps.slice(0,4).map(gap=><span className="tag gap" key={gap}>{gap}</span>)}
+                  </div>
+                )}
+                <div className="career-actions">
+                  {careerInsight.recommended_actions.slice(0,3).map(action=><span key={action}>✦ {action}</span>)}
+                </div>
+              </>
+            ) : (
+              <p>{locale === "en"
+                ? "Analyze your matches and application history to find repeated gaps and next actions."
+                : "Проанализирует мэтчи и историю откликов, найдет повторяющиеся пробелы и следующие шаги."}</p>
+            )}
+            <button className="ghost-button career-button" onClick={onCareer} disabled={careerLoading}>
+              <Sparkles size={15}/>
+              {careerLoading
+                ? (locale==="en"?"Analyzing…":"Анализируем…")
+                : (careerInsight
+                  ? (locale==="en"?"Refresh insight":"Обновить анализ")
+                  : (locale==="en"?"Analyze my search":"Анализировать поиск"))}
+            </button>
           </section>
           <section className="panel install-card">
             <img src="/brand-icon.svg" alt="" />
