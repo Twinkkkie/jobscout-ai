@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,22 +11,38 @@ from app.services.matching import score_job
 async def sync_jobs(db: AsyncSession, limit: int = 100) -> int:
     collected = await collect_public_jobs(limit)
     saved = 0
+    now = datetime.now(UTC)
     for item in collected:
         existing = await db.scalar(
             select(Job).where(Job.source == item.source, Job.external_id == item.external_id)
         )
         if existing is None:
-            db.add(Job(**item.__dict__))
+            db.add(
+                Job(
+                    **item.__dict__,
+                    last_seen_at=now,
+                    is_active=True,
+                    closed_at=None,
+                )
+            )
             saved += 1
         else:
             for key, value in item.__dict__.items():
                 setattr(existing, key, value)
+            existing.last_seen_at = now
+            existing.is_active = True
+            existing.closed_at = None
     await db.commit()
     return saved
 
 
 async def rebuild_matches(db: AsyncSession, profile: CandidateProfile, limit: int = 250) -> int:
-    result = await db.execute(select(Job).order_by(Job.collected_at.desc()).limit(limit))
+    result = await db.execute(
+        select(Job)
+        .where(Job.is_active.is_(True))
+        .order_by(Job.collected_at.desc())
+        .limit(limit)
+    )
     jobs = list(result.scalars().all())
     count = 0
 
