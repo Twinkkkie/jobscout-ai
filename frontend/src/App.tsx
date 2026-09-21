@@ -475,9 +475,10 @@ function App() {
                 const analyzed = result.match as Match;
                 setMatches(current => {
                   const exists = current.some(item => item.job.id === analyzed.job.id);
-                  return exists
+                  const next = exists
                     ? current.map(item => item.job.id === analyzed.job.id ? analyzed : item)
                     : [analyzed, ...current];
+                  return [...next].sort((a,b) => b.score - a.score);
                 });
                 return analyzed;
               }}
@@ -876,6 +877,10 @@ function JobsPage({
     () => new Map(matches.map(match => [match.job.id, match])),
     [matches]
   );
+  const sortedJobs = useMemo(
+    () => [...jobs].sort((a,b) => (matchByJob.get(b.id)?.score || 0) - (matchByJob.get(a.id)?.score || 0)),
+    [jobs, matchByJob]
+  );
   const statusByJob = useMemo(
     () => new Map(applications.map(application => [application.job.id, application.status])),
     [applications]
@@ -927,7 +932,7 @@ function JobsPage({
       {scanNotice&&<div className="scan-feedback"><Sparkles size={17}/><span>{scanNotice}</span></div>}
       {feedback&&<div className="action-feedback"><CheckCircle2 size={17}/><span>{feedback}</span></div>}
       <div className="job-grid">
-        {jobs.map((job) => {
+        {sortedJobs.map((job) => {
           const status=statusByJob.get(job.id);
           const label=trackerLabel(status);
           const locked=Boolean(status && status!=="saved");
