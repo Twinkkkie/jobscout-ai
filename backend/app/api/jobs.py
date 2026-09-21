@@ -71,7 +71,7 @@ async def rematch(
 @router.get("/matches", response_model=list[MatchRead])
 async def list_matches(
     verdict: str | None = None,
-    min_score: float = Query(default=0, ge=0, le=100),
+    min_score: float = Query(default=45, ge=0, le=100),
     limit: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
