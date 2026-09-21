@@ -192,3 +192,33 @@ def test_web_php_role_exposes_missing_ecommerce_stack() -> None:
     assert scored["score"] < 45
     assert scored["verdict"] == "skip"
     assert any("role family is outside" in reason for reason in scored["reasons"])
+
+
+
+def test_ai_software_engineer_is_recognized_as_ai_family() -> None:
+    candidate = profile()
+    candidate.seniority_levels = ["junior", "middle"]
+    candidate.skills = candidate.skills + ["Kubernetes", "React", "TypeScript", "Claude", "Cursor"]
+    job = Job(
+        source="test",
+        external_id="7",
+        title="AI Software Engineer",
+        company="Example",
+        location="Remote",
+        remote_region="Worldwide",
+        description=(
+            "Build AI software with AI Agents, Claude, Kubernetes, LLMs, "
+            "PostgreSQL, React and TypeScript. Remote."
+        ),
+        tags=["software engineering"],
+        salary_min=None,
+        salary_max=None,
+        currency="USD",
+        url="https://example.com/job7",
+    )
+
+    scored = score_job(candidate, job)
+
+    assert scored["score"] >= 85
+    assert scored["verdict"] == "apply"
+    assert any("same AI role family" in reason for reason in scored["reasons"])
