@@ -761,10 +761,13 @@ function ResumePage({
     setBusy(true);
     const data=new FormData();
     data.append("file",file);
-    const uploaded=await api("/resumes",{method:"POST",body:data});
-    setResult(uploaded);
-    setBusy(false);
-    await onUploaded();
+    try{
+      const uploaded=await api("/resumes",{method:"POST",body:data});
+      setResult(uploaded);
+      await onUploaded();
+    }finally{
+      setBusy(false);
+    }
   };
   return (
     <>
@@ -774,9 +777,25 @@ function ResumePage({
           <Upload size={42}/>
           <h2>{t.chooseFile}</h2>
           <p>PDF / DOCX / TXT · max 10 MB</p>
-          <input type="file" accept=".pdf,.docx,.txt" onChange={e=>setFile(e.target.files?.[0]||null)}/>
-          {file&&<strong>{file.name}</strong>}
-          <button className="primary-button" disabled={!file||busy} onClick={submit}>{busy?"Analyzing…":t.upload}</button>
+          <div className="custom-file-picker">
+            <input
+              id="resume-file"
+              className="native-file-input"
+              type="file"
+              accept=".pdf,.docx,.txt"
+              onChange={e=>setFile(e.target.files?.[0]||null)}
+            />
+            <label className="file-picker-button" htmlFor="resume-file">
+              <Upload size={17}/>
+              {locale==="en"?"Choose file":"Выбрать файл"}
+            </label>
+            <span className={file?"file-name selected":"file-name"}>
+              {file?.name || (locale==="en"?"No file selected":"Файл не выбран")}
+            </span>
+          </div>
+          <button className="primary-button" disabled={!file||busy} onClick={submit}>
+            {busy?(locale==="en"?"Analyzing…":"Анализируем…"):t.upload}
+          </button>
         </section>
         <section className="panel parsing-preview">
           <Sparkles size={22}/>
