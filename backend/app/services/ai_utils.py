@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 from typing import Any
@@ -35,9 +36,12 @@ async def ask_openai_json(prompt: str) -> dict[str, Any] | None:
 
     client = AsyncOpenAI(api_key=settings.openai_api_key)
     try:
-        response = await client.responses.create(
-            model=settings.openai_model,
-            input=prompt,
+        response = await asyncio.wait_for(
+            client.responses.create(
+                model=settings.openai_model,
+                input=prompt,
+            ),
+            timeout=settings.openai_timeout_seconds,
         )
     except Exception:
         # External AI failures must not take down resume upload, scans, matching,
