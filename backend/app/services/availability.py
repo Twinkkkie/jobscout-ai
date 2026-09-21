@@ -47,7 +47,7 @@ async def _check_url(client: httpx.AsyncClient, job: Job, semaphore: asyncio.Sem
     return job, None
 
 
-async def verify_job_availability(db: AsyncSession, limit: int = 140) -> dict[str, int]:
+async def verify_job_availability(db: AsyncSession, limit: int = 100) -> dict[str, int]:
     """
     Re-check active jobs, prioritizing anything the user has saved/applied to.
     Only strong closure signals are used so anti-bot pages do not create false closures.
@@ -90,8 +90,8 @@ async def verify_job_availability(db: AsyncSession, limit: int = 140) -> dict[st
     headers = {
         "User-Agent": "Mozilla/5.0 (compatible; JobScoutAI/0.1; +https://github.com/Twinkkkie/jobscout-ai)"
     }
-    semaphore = asyncio.Semaphore(12)
-    async with httpx.AsyncClient(timeout=12, follow_redirects=True, headers=headers) as client:
+    semaphore = asyncio.Semaphore(20)
+    async with httpx.AsyncClient(timeout=6, follow_redirects=True, headers=headers) as client:
         results = await asyncio.gather(
             *[_check_url(client, job, semaphore) for job in jobs],
             return_exceptions=False,
