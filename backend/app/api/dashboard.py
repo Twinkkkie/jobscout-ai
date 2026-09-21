@@ -15,9 +15,17 @@ async def stats(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> DashboardStats:
-    jobs_total = await db.scalar(select(func.count(Job.id))) or 0
+    jobs_total = await db.scalar(
+        select(func.count(Job.id)).where(Job.is_active.is_(True))
+    ) or 0
     strong = await db.scalar(
-        select(func.count(JobMatch.id)).where(JobMatch.user_id == user.id, JobMatch.score >= 75)
+        select(func.count(JobMatch.id))
+        .join(Job, Job.id == JobMatch.job_id)
+        .where(
+            JobMatch.user_id == user.id,
+            JobMatch.score >= 75,
+            Job.is_active.is_(True),
+        )
     ) or 0
 
     async def count_status(status: str) -> int:
