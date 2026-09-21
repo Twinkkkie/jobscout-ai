@@ -53,3 +53,29 @@ API docs: http://localhost:8030/docs
 ## Vacancy freshness
 
 Each scan adds newly discovered vacancies, refreshes existing ones, and re-checks recent/saved vacancy links. Confirmed closed listings (HTTP 404/410 or strong closed-position markers) are hidden from Jobs and Matches. Saved vacancies remain in the tracker with a visible closed status so application history is not silently lost. Network errors, rate limits and anti-bot responses are treated as uncertain rather than closed to avoid false positives.
+
+
+## AI agents
+
+JobScout now has three agent workflows:
+
+- **Job Scout Agent** — collects jobs, checks availability, selectively analyzes promising vacancies with AI, and rebuilds hybrid matches.
+- **Application Agent** — analyzes a vacancy, calculates the hybrid match, creates a tailored application pack, fact-checks claims, and hands the result to the user for review.
+- **Career Agent** — analyzes match/application history to surface recurring skill gaps, strongest skills, and next actions.
+
+The intended orchestration runtime is **LangGraph**. A sequential fallback keeps local development working when an older Docker image has not yet installed LangGraph.
+
+The AI layer also includes:
+- structured resume analysis,
+- structured vacancy requirement extraction,
+- hybrid deterministic+AI matching,
+- on-demand AI match explanations,
+- richer application packs.
+
+See `docs/AI_ARCHITECTURE.md` for the architecture and guardrails.
+
+### Enabling AI locally
+
+Set `OPENAI_API_KEY` in the local `.env` file. Never commit the real key.
+
+`GET /api/v1/agents/status` reports whether an AI key is configured and whether LangGraph is available, without exposing secrets.
