@@ -331,11 +331,43 @@ def _unknown_profile_matches(skills: list[str], job_text: str) -> list[str]:
 
 def _role_families_for_text(value: str) -> set[str]:
     value_lower = value.lower()
-    return {
+    families = {
         family
         for family, markers in ROLE_FAMILIES.items()
         if any(marker in value_lower for marker in markers)
     }
+
+    # Real vacancy titles often insert words between the family marker and the
+    # role noun: "AI Software Engineer", "Generative AI Backend Engineer",
+    # "Python AI Developer", etc. Phrase-only matching misses these.
+    tokens = _tokens(value_lower)
+    if (
+        {"ai", "llm", "genai"} & tokens
+        or "artificial intelligence" in value_lower
+        or "generative ai" in value_lower
+        or "rag " in value_lower
+        or value_lower.startswith("rag")
+        or "agentic" in value_lower
+    ):
+        families.add("ai")
+    if "python" in tokens:
+        families.add("python")
+    if "backend" in tokens or "back-end" in value_lower:
+        families.add("backend")
+    if "software" in tokens and ({"engineer", "developer"} & tokens):
+        families.add("software")
+    if ("machine" in tokens and "learning" in tokens) or "ml" in tokens:
+        families.add("ml")
+    if (
+        ("web" in tokens and ({"developer", "entwickler"} & tokens))
+        or "frontend" in tokens
+        or "front-end" in value_lower
+        or "laravel" in tokens
+        or "shopify" in tokens
+    ):
+        families.add("web")
+
+    return families
 
 
 def _role_score(target_roles: list[str], title: str) -> tuple[float, str | None]:
