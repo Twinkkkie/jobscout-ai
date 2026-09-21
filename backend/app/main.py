@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import applications, auth, dashboard, jobs, profile, resumes
+from app.api import agents, applications, auth, dashboard, jobs, profile, resumes
 from app.core.config import settings
 from app.db import create_schema
 
@@ -41,3 +41,4 @@ app.include_router(resumes.router, prefix="/api/v1")
 app.include_router(jobs.router, prefix="/api/v1")
 app.include_router(applications.router, prefix="/api/v1")
 app.include_router(dashboard.router, prefix="/api/v1")
+app.include_router(agents.router, prefix="/api/v1")
