@@ -89,3 +89,23 @@ async def list_applications(
         )
     ).all()
     return [_read(application, job) for application, job in rows]
+
+
+@router.delete("/{job_id}", status_code=204)
+async def delete_application(
+    job_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> None:
+    application = await db.scalar(
+        select(Application).where(Application.user_id == user.id, Application.job_id == job_id)
+    )
+    if application is None:
+        raise HTTPException(status_code=404, detail="Application not found")
+    if application.status != "saved":
+        raise HTTPException(
+            status_code=409,
+            detail="Only saved vacancies can be removed from the saved list",
+        )
+    await db.delete(application)
+    await db.commit()
