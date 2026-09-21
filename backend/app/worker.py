@@ -7,6 +7,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.db import SessionLocal
 from app.models import CandidateProfile
+from app.services.availability import verify_job_availability
 from app.services.orchestrator import rebuild_matches, sync_jobs
 
 celery_app = Celery("jobscout", broker=settings.redis_url, backend=settings.redis_url)
@@ -26,6 +27,7 @@ celery_app.conf.update(
 async def _scan(limit: int, user_id: str | None) -> dict:
     async with SessionLocal() as db:
         new_jobs = await sync_jobs(db, limit)
+        availability = await verify_job_availability(db)
         matched = 0
         if user_id:
             profile = await db.scalar(
@@ -33,18 +35,28 @@ async def _scan(limit: int, user_id: str | None) -> dict:
             )
             if profile:
                 matched = await rebuild_matches(db, profile)
-        return {"new_jobs": new_jobs, "matched": matched}
+        return {
+            "new_jobs": new_jobs,
+            "matched": matched,
+            "availability": availability,
+        }
 
 
 async def _scan_all(limit: int) -> dict:
     async with SessionLocal() as db:
         new_jobs = await sync_jobs(db, limit)
+        availability = await verify_job_availability(db)
         result = await db.execute(select(CandidateProfile))
         profiles = list(result.scalars().all())
         matched = 0
         for profile in profiles:
             matched += await rebuild_matches(db, profile)
-        return {"new_jobs": new_jobs, "profiles": len(profiles), "matches_processed": matched}
+        return {
+            "new_jobs": new_jobs,
+            "profiles": len(profiles),
+            "matches_processed": matched,
+            "availability": availability,
+        }
 
 
 @celery_app.task
