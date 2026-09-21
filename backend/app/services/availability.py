@@ -2,7 +2,7 @@ import asyncio
 from datetime import UTC, datetime
 
 import httpx
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Application, Job
@@ -52,17 +52,38 @@ async def verify_job_availability(db: AsyncSession, limit: int = 140) -> dict[st
     Re-check active jobs, prioritizing anything the user has saved/applied to.
     Only strong closure signals are used so anti-bot pages do not create false closures.
     """
-    saved_job_ids = select(Application.job_id).distinct()
-    query = (
-        select(Job)
-        .where(
-            Job.is_active.is_(True),
-            or_(Job.id.in_(saved_job_ids), Job.collected_at.is_not(None)),
-        )
-        .order_by(Job.collected_at.desc())
-        .limit(limit)
+    saved_job_ids = list(
+        (await db.execute(select(Application.job_id).distinct())).scalars().all()
     )
-    jobs = list((await db.execute(query)).scalars().all())
+
+    saved_jobs: list[Job] = []
+    if saved_job_ids:
+        saved_jobs = list(
+            (
+                await db.execute(
+                    select(Job).where(
+                        Job.id.in_(saved_job_ids),
+                        Job.is_active.is_(True),
+                    )
+                )
+            ).scalars().all()
+        )
+
+    remaining = max(0, limit - len(saved_jobs))
+    recent_jobs = list(
+        (
+            await db.execute(
+                select(Job)
+                .where(
+                    Job.is_active.is_(True),
+                    Job.id.not_in(saved_job_ids) if saved_job_ids else Job.is_active.is_(True),
+                )
+                .order_by(Job.collected_at.desc())
+                .limit(remaining)
+            )
+        ).scalars().all()
+    )
+    jobs = saved_jobs + recent_jobs
     if not jobs:
         return {"checked": 0, "closed": 0, "active": 0, "uncertain": 0}
 
