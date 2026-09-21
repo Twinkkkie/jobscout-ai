@@ -36,6 +36,10 @@ type Job = {
   currency: string;
   url: string;
   published_at: string | null;
+  collected_at: string;
+  last_checked_at: string | null;
+  is_active: boolean;
+  closed_at: string | null;
 };
 
 type Match = {
@@ -130,6 +134,7 @@ function App() {
   });
   const [search, setSearch] = useState("");
   const [scanning, setScanning] = useState(false);
+  const [scanNotice, setScanNotice] = useState("");
   const [error, setError] = useState("");
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
 
@@ -188,6 +193,7 @@ function App() {
 
   const scanJobs = async () => {
     setScanning(true);
+    setScanNotice("");
     setError("");
     try {
       const queued = await api("/jobs/scan", { method: "POST" });
@@ -200,6 +206,14 @@ function App() {
 
         if (state.status === "success") {
           completed = true;
+          const result = state.result || {};
+          const newJobs = Number(result.new_jobs || 0);
+          const closedJobs = Number(result.availability?.closed || 0);
+          setScanNotice(
+            locale === "en"
+              ? `${newJobs} new vacancies added${closedJobs ? ` · ${closedJobs} closed vacancies removed` : ""}`
+              : `Добавлено новых вакансий: ${newJobs}${closedJobs ? ` · закрытых убрано: ${closedJobs}` : ""}`
+          );
           await refresh();
           break;
         }
@@ -338,6 +352,7 @@ function App() {
               matches={matches}
               onScan={scanJobs}
               scanning={scanning}
+              scanNotice={scanNotice}
               onPrepare={async (jobId) => {
                 const app = await api(`/applications/${jobId}/prepare`, { method: "POST" });
                 setSelectedApplication(app);
@@ -686,6 +701,7 @@ function JobsPage({
   onSave,
   onScan,
   scanning,
+  scanNotice,
 }: {
   jobs: Job[];
   applications: Application[];
@@ -693,6 +709,7 @@ function JobsPage({
   onSave: (jobId: string) => Promise<void>;
   onScan: () => void;
   scanning: boolean;
+  scanNotice: string;
 }) {
   const t = messages[locale];
   const [savingId,setSavingId]=useState<string|null>(null);
@@ -732,6 +749,7 @@ function JobsPage({
         <div><span className="eyebrow">{t.remote}</span><h1>{t.jobs}</h1><p>{locale === "en" ? "Fresh roles from attributed public sources." : "Свежие вакансии из разрешенных публичных источников."}</p></div>
         <button className="primary-button" onClick={onScan} disabled={scanning}><Sparkles size={18} />{scanning ? t.scanning : t.scan}</button>
       </div>
+      {scanNotice&&<div className="scan-feedback"><Sparkles size={17}/><span>{scanNotice}</span></div>}
       {feedback&&<div className="action-feedback"><CheckCircle2 size={17}/><span>{feedback}</span></div>}
       <div className="job-grid">
         {jobs.map((job) => {
@@ -741,7 +759,12 @@ function JobsPage({
           return (
             <article className="job-card" key={job.id}>
               <div className="job-card-head">
-                <div className="company-badge">{job.company.slice(0,1).toUpperCase()}</div>
+                <div className="job-card-leading">
+                  <div className="company-badge">{job.company.slice(0,1).toUpperCase()}</div>
+                  {Date.now()-new Date(job.collected_at).getTime() < 24*60*60*1000 && (
+                    <span className="new-job-badge">{locale==="en"?"NEW":"НОВАЯ"}</span>
+                  )}
+                </div>
                 <button
                   className={`save-job-button ${status?"tracked":""}`}
                   onClick={() => !locked && saveJob(job.id)}
@@ -924,8 +947,12 @@ function ApplicationsPage({
           <div className="application-row" key={app.id}>
             <div className="company-badge">{app.job.company.slice(0,1).toUpperCase()}</div>
             <div><strong>{app.job.title}</strong><span>{app.job.company}</span></div>
-            <span className={`status-pill ${app.status}`}>
-              {tab==="saved" ? (locale==="en"?"Saved":"Сохранено") : statusLabel(app.status)}
+            <span className={`status-pill ${!app.job.is_active?"closed":app.status}`}>
+              {!app.job.is_active
+                ? (locale==="en"?"Vacancy closed":"Вакансия закрыта")
+                : tab==="saved"
+                  ? (locale==="en"?"Saved":"Сохранено")
+                  : statusLabel(app.status)}
             </span>
             <div className="application-actions">
               <a href={app.job.url} target="_blank" rel="noreferrer" title={locale==="en"?"Open vacancy":"Открыть вакансию"}><ArrowUpRight size={18}/></a>
