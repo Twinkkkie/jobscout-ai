@@ -266,13 +266,37 @@ function App() {
           const result = state.result || {};
           const newJobs = Number(result.new_jobs || 0);
           const closedJobs = Number(result.availability?.closed || 0);
-          const aiJobs = Number(result.ai_enriched_jobs || 0);
+          const aiTaskId = result.ai_task_id as string | undefined;
           setScanNotice(
             locale === "en"
-              ? `${newJobs} new vacancies added${aiJobs ? ` · AI analyzed: ${aiJobs}` : ""}${closedJobs ? ` · ${closedJobs} closed removed` : ""}`
-              : `Добавлено новых вакансий: ${newJobs}${aiJobs ? ` · AI проанализировал: ${aiJobs}` : ""}${closedJobs ? ` · закрытых убрано: ${closedJobs}` : ""}`
+              ? `${newJobs} new vacancies added${closedJobs ? ` · ${closedJobs} closed removed` : ""}${aiTaskId ? " · AI is refining matches in the background" : ""}`
+              : `Добавлено новых вакансий: ${newJobs}${closedJobs ? ` · закрытых убрано: ${closedJobs}` : ""}${aiTaskId ? " · AI уточняет мэтчи в фоне" : ""}`
           );
           await refresh();
+
+          if (aiTaskId) {
+            void (async () => {
+              for (let aiAttempt = 0; aiAttempt < 30; aiAttempt += 1) {
+                await new Promise((resolve) => window.setTimeout(resolve, 1000));
+                try {
+                  const aiState = await api(`/jobs/scan/${aiTaskId}`);
+                  if (aiState.status === "success") {
+                    const aiJobs = Number(aiState.result?.ai_enriched_jobs || 0);
+                    await refresh();
+                    setScanNotice(
+                      locale === "en"
+                        ? `${newJobs} new vacancies added · AI refreshed ${aiJobs} promising vacancies`
+                        : `Добавлено новых вакансий: ${newJobs} · AI обновил ${aiJobs} перспективных вакансий`
+                    );
+                    break;
+                  }
+                  if (aiState.status === "failure") break;
+                } catch {
+                  break;
+                }
+              }
+            })();
+          }
           break;
         }
 
