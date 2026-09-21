@@ -132,6 +132,54 @@ function splitCsv(value: string) {
     .filter(Boolean);
 }
 
+function localizeMatchReason(reason: string, locale: Locale) {
+  if (locale === "en") return reason;
+
+  const exact: Record<string,string> = {
+    "Target role directly matches the vacancy title.": "Целевая роль напрямую совпадает с названием вакансии.",
+    "The vacancy is in the same AI role family as your target roles.": "Вакансия относится к тому же AI-направлению, что и твои целевые роли.",
+    "The vacancy title is in the same role family as your target roles.": "Название вакансии относится к тому же направлению, что и твои целевые роли.",
+    "The vacancy title overlaps with your target-role keywords.": "Название вакансии пересекается с ключевыми словами твоих целевых ролей.",
+    "The role is adjacent to your AI/Python backend focus.": "Роль смежная с твоим фокусом на AI/Python backend.",
+    "The source provides too few explicit technical requirements for a complete gap analysis.": "В источнике слишком мало явных технических требований для полного анализа gaps.",
+    "The role is described as remote.": "Вакансия указана как удаленная.",
+    "The published salary range reaches your minimum.": "Опубликованный диапазон зарплаты достигает твоего минимума.",
+    "The published maximum salary is below your minimum.": "Максимальная указанная зарплата ниже твоего минимума.",
+    "The vacancy role family is outside your selected target roles.": "Направление вакансии не входит в выбранные тобой целевые роли.",
+    "The vacancy title is outside your target role families.": "Название вакансии не относится к выбранным тобой направлениям."
+  };
+  if (exact[reason]) return exact[reason];
+
+  let match = reason.match(/^The vacancy seniority \((.+)\) matches your selected level\.$/);
+  if (match) return `Грейд вакансии (${match[1]}) совпадает с выбранным тобой уровнем.`;
+
+  match = reason.match(/^The vacancy seniority \((.+)\) is outside your selected levels\.$/);
+  if (match) return `Грейд вакансии (${match[1]}) не входит в выбранные тобой уровни.`;
+
+  match = reason.match(/^Hybrid analysis found (\d+) technical requirements; you match (\d+)\.$/);
+  if (match) return `Гибридный анализ нашел технических требований: ${match[1]}; совпадают с твоим профилем: ${match[2]}.`;
+
+  match = reason.match(/^You match (\d+) of (\d+) detected technical requirements\.$/);
+  if (match) return `Совпадает ${match[1]} из ${match[2]} найденных технических требований.`;
+
+  match = reason.match(/^Missing must-have skills: (.+)$/);
+  if (match) return `Отсутствуют обязательные навыки: ${match[1]}`;
+
+  match = reason.match(/^Your (\d+) years of experience meet the detected (\d+)\+ year requirement\.$/);
+  if (match) return `Твои ${match[1]} года коммерческого опыта соответствуют требованию ${match[2]}+ лет.`;
+
+  match = reason.match(/^The listing asks for about (\d+)\+ years; you are one year below that detected requirement\.$/);
+  if (match) return `В вакансии требуется около ${match[1]}+ лет опыта; по профилю не хватает примерно одного года.`;
+
+  match = reason.match(/^The listing appears to ask for (\d+)\+ years, above your stated (\d+) years\.$/);
+  if (match) return `Вакансия, похоже, требует ${match[1]}+ лет опыта, что выше указанных в профиле ${match[2]} лет.`;
+
+  match = reason.match(/^Excluded keywords detected: (.+)$/);
+  if (match) return `Найдены исключающие ключевые слова: ${match[1]}`;
+
+  return reason;
+}
+
 function decodeHtmlEntities(value: string) {
   if (!value) return "";
   const textarea = document.createElement("textarea");
@@ -599,7 +647,7 @@ function App() {
                   });
                 };
 
-                const result = await api(`/jobs/${jobId}/match-analysis`, { method: "POST" });
+                const result = await api(`/jobs/${jobId}/match-analysis?locale=${locale}`, { method: "POST" });
                 const analyzed = result.match as Match;
                 applyMatch(analyzed);
 
@@ -611,7 +659,7 @@ function App() {
                       try {
                         const state = await api(`/jobs/scan/${taskId}`);
                         if (state.status === "success") {
-                          const refined = await api(`/jobs/${jobId}/match-analysis?queue_ai=false`, { method: "POST" });
+                          const refined = await api(`/jobs/${jobId}/match-analysis?queue_ai=false&locale=${locale}`, { method: "POST" });
                           applyMatch(refined.match as Match);
                           break;
                         }
@@ -1252,7 +1300,7 @@ function MatchesPage({
                 <div><h4>✓ {t.matchingSkills}</h4><div className="skill-row">{match.matching_skills.map(skill=><span className="tag positive" key={skill}>{skill}</span>)}</div></div>
                 <div><h4>! {t.skillGaps}</h4><div className="skill-row">{match.skill_gaps.map(skill=><span className="tag gap" key={skill}>{skill}</span>)}</div></div>
               </div>
-              <div className="reason-list">{match.reasons.map(reason=><span key={reason}>✦ {reason}</span>)}</div>
+              <div className="reason-list">{match.reasons.map(reason=><span key={reason}>✦ {localizeMatchReason(reason,locale)}</span>)}</div>
               <div className="job-actions">
                 <a className="ghost-button" href={match.job.url} target="_blank" rel="noreferrer">{t.openOriginal}<ArrowUpRight size={15}/></a>
                 <button
@@ -1617,7 +1665,7 @@ function JobMatchModal({match,locale,onClose}:{match:Match;locale:Locale;onClose
         </div>
       </div>
     </div>
-    <div className="reason-list">{match.reasons.map(reason=><span key={reason}>✦ {reason}</span>)}</div>
+    <div className="reason-list">{match.reasons.map(reason=><span key={reason}>✦ {localizeMatchReason(reason,locale)}</span>)}</div>
     <a className="primary-button link-button" href={match.job.url} target="_blank" rel="noreferrer">{t.openOriginal}<ArrowUpRight size={16}/></a>
   </div></div>;
 }
