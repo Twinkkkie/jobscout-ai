@@ -5,7 +5,7 @@ from app.models import Job
 from app.services.ai_utils import ask_openai_json, clean_string_list
 
 
-VACANCY_ANALYSIS_VERSION = 2
+VACANCY_ANALYSIS_VERSION = 3
 
 ALLOWED_ROLE_FAMILIES = {
     "ai", "python", "backend", "software", "ml", "data", "frontend",
@@ -119,9 +119,13 @@ requirements. Return ONE valid JSON object and no markdown:
 }}
 
 Rules:
-- Extract explicit/core technical requirements as must-have.
-- Extract preferred/bonus technologies as nice-to-have.
-- Preserve uncommon frameworks/platforms exactly when possible.
+- Be exhaustive for technical requirements: extract EVERY explicitly named language,
+  framework, library, database, cloud service, platform, API, protocol, DevOps tool,
+  AI/ML tool, testing tool, and engineering capability mentioned in the vacancy.
+- Put explicitly required/core items in must_have_skills.
+- Put preferred/bonus/"nice to have" items in nice_to_have_skills.
+- Do not silently omit a named technology because it seems secondary.
+- Preserve uncommon product/platform names exactly when possible.
 - Do not include generic soft skills as technical skills.
 - years_required is the minimum explicit years, otherwise null.
 
@@ -186,7 +190,10 @@ Return ONE valid JSON object and no markdown with this exact outer shape:
   ]
 }}
 
-Keep each item concise. Extract explicit technical requirements faithfully.
+Keep each item concise, but be exhaustive for named technical requirements. Extract every
+explicitly named language, framework, library, database, cloud service, platform, API,
+protocol, DevOps/testing tool, and AI/ML technology, classifying each as must-have or
+nice-to-have. Do not omit uncommon or secondary named technologies.
 
 <VACANCIES>
 {chr(10).join(chr(10) + item for item in payload_parts)}
