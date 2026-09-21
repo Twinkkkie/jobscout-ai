@@ -359,7 +359,7 @@ def _match_requirement_to_profile(requirement: str, skills: list[str]) -> str | 
 
 def _ai_requirement_sets(job: Job, skills: list[str]) -> tuple[list[str], list[str], list[str], list[str]]:
     analysis = job.ai_analysis or {}
-    if not analysis.get("ai_enriched"):
+    if not analysis.get("ai_enriched") or analysis.get("analysis_version") != 2:
         return [], [], [], []
 
     must = [str(item).strip() for item in analysis.get("must_have_skills", []) if str(item).strip()]
