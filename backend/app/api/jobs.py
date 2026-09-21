@@ -13,7 +13,7 @@ from app.services.match_ai import explain_match_ai
 from app.services.matching import score_job
 from app.services.orchestrator import rebuild_matches
 from app.services.vacancy_ai import analyze_vacancy_ai
-from app.worker import celery_app, scan_jobs_task
+from app.worker import analyze_job_match_task, celery_app, scan_jobs_task
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -128,9 +128,13 @@ async def analyze_match(
         from fastapi import HTTPException
         raise HTTPException(status_code=409, detail="Complete your profile first")
 
-    if not ((job.ai_analysis or {}).get("ai_enriched") and (job.ai_analysis or {}).get("analysis_version") == 3):
-        job.ai_analysis = await analyze_vacancy_ai(job)
+    has_current_ai = bool(
+        (job.ai_analysis or {}).get("ai_enriched")
+        and (job.ai_analysis or {}).get("analysis_version") == 3
+    )
 
+    # Always return an immediate, internally consistent match. If this vacancy
+    # still needs AI extraction, refine it in Celery instead of blocking the UI.
     scored = score_job(profile, job)
     match = await db.scalar(
         select(JobMatch).where(
@@ -142,12 +146,7 @@ async def analyze_match(
         match = JobMatch(user_id=user.id, job_id=job.id)
         db.add(match)
 
-    explanation = await explain_match_ai(
-        profile,
-        job,
-        scored,
-    )
-
+    explanation = await explain_match_ai(profile, job, scored)
     match.score = scored["score"]
     match.matching_skills = scored["matching_skills"]
     match.skill_gaps = scored["skill_gaps"]
@@ -156,6 +155,11 @@ async def analyze_match(
     match.ai_explanation = explanation
     await db.commit()
     await db.refresh(match)
+
+    task_id = None
+    if settings.openai_api_key and not has_current_ai:
+        task = analyze_job_match_task.delay(str(user.id), str(job.id))
+        task_id = task.id
 
     read = MatchRead(
         id=match.id,
@@ -167,4 +171,9 @@ async def analyze_match(
         ai_explanation=match.ai_explanation,
         job=JobRead.model_validate(job),
     )
-    return MatchAnalysisRead(match=read, explanation=explanation)
+    return MatchAnalysisRead(
+        match=read,
+        explanation=explanation,
+        ai_pending=bool(task_id),
+        task_id=task_id,
+    )
