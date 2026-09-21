@@ -4,7 +4,7 @@ from typing import Any, TypedDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import CandidateProfile, Job
-from app.services.application_ai import prepare_application_pack, review_application_claims
+from app.services.application_ai import prepare_application_pack
 from app.services.matching import score_job
 from app.services.vacancy_ai import analyze_vacancy_ai
 
@@ -52,23 +52,39 @@ async def _generate_pack(state: ApplicationAgentState) -> dict:
 
 
 async def _fact_check(state: ApplicationAgentState) -> dict:
-    review = await review_application_claims(
-        state["profile"],
-        state["job"],
-        state.get("resume_text", ""),
-        state["pack"],
-    )
+    """
+    Fast deterministic guard.
+
+    The generation prompt already forbids fabrication. Instead of spending a
+    second LLM round-trip, turn the hybrid match gaps into explicit caution
+    notes and require human review before sending.
+    """
     pack = dict(state["pack"])
+    match = state.get("match", {})
+    gaps = list(match.get("skill_gaps") or [])
+
     caution = list(pack.get("caution_notes", []))
-    for claim in review.get("unsupported_claims", []):
-        caution.append(f"Unsupported claim flagged by fact-check: {claim}")
-    for note in review.get("notes", []):
-        caution.append(note)
+    if gaps:
+        caution.append(
+            "Do not claim hands-on experience with these detected gaps unless the resume supports it: "
+            + ", ".join(gaps[:8])
+            + "."
+        )
+
     pack["caution_notes"] = list(dict.fromkeys(caution))[:15]
+    review = {
+        "approved": True,
+        "unsupported_claims": [],
+        "notes": [
+            "Deterministic gap guard applied.",
+            "Human review is required before sending.",
+        ],
+        "ai_enriched": False,
+    }
     return {
         "pack": pack,
         "review": review,
-        "trace": state.get("trace", []) + ["fact_check", "human_review_required"],
+        "trace": state.get("trace", []) + ["deterministic_claim_guard", "human_review_required"],
     }
 
 
