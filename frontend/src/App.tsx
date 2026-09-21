@@ -61,6 +61,7 @@ type Profile = {
   english_level: string;
   skills: string[];
   target_roles: string[];
+  seniority_levels: string[];
   preferred_regions: string[];
   min_salary_usd: number | null;
   remote_only: boolean;
@@ -127,6 +128,7 @@ function App() {
     english_level: "",
     skills: [],
     target_roles: [],
+    seniority_levels: [],
     preferred_regions: [],
     min_salary_usd: null,
     remote_only: true,
@@ -372,6 +374,7 @@ function App() {
           {page === "jobs" && (
             <JobsPage
               jobs={visibleJobs}
+              matches={matches}
               applications={applications}
               locale={locale}
               onSave={async (jobId) => {
@@ -705,6 +708,7 @@ function MatchRow({
 
 function JobsPage({
   jobs,
+  matches,
   applications,
   locale,
   onSave,
@@ -713,6 +717,7 @@ function JobsPage({
   scanNotice,
 }: {
   jobs: Job[];
+  matches: Match[];
   applications: Application[];
   locale: Locale;
   onSave: (jobId: string) => Promise<void>;
@@ -723,6 +728,11 @@ function JobsPage({
   const t = messages[locale];
   const [savingId,setSavingId]=useState<string|null>(null);
   const [feedback,setFeedback]=useState<string>("");
+  const [selectedMatch,setSelectedMatch]=useState<Match|null>(null);
+  const matchByJob = useMemo(
+    () => new Map(matches.map(match => [match.job.id, match])),
+    [matches]
+  );
   const statusByJob = useMemo(
     () => new Map(applications.map(application => [application.job.id, application.status])),
     [applications]
@@ -792,11 +802,24 @@ function JobsPage({
               <p>{job.company}</p>
               <div className="job-meta"><span>🌐 {job.location || job.remote_region}</span><span>{salary(job,t.salaryUnknown)}</span></div>
               <div className="skill-row">{job.tags.slice(0,5).map(tag=><span className="tag" key={tag}>{tag}</span>)}</div>
-              <div className="job-actions"><span className="source-label">{job.source}</span><a className="soft-button" href={job.url} target="_blank" rel="noreferrer">{t.openOriginal}<ArrowUpRight size={15}/></a></div>
+              <div className="job-actions">
+                <span className="source-label">{job.source}</span>
+                {matchByJob.get(job.id)&&(
+                  <button className="soft-button match-check-button" onClick={()=>setSelectedMatch(matchByJob.get(job.id) || null)}>
+                    <Target size={15}/>
+                    {locale==="en"?"Check match":"Проверить мэтч"}
+                    <strong>{Math.round(matchByJob.get(job.id)!.score)}%</strong>
+                  </button>
+                )}
+                <a className="soft-button" href={job.url} target="_blank" rel="noreferrer">{t.openOriginal}<ArrowUpRight size={15}/></a>
+              </div>
             </article>
           );
         })}
       </div>
+      {selectedMatch&&(
+        <JobMatchModal match={selectedMatch} locale={locale} onClose={()=>setSelectedMatch(null)}/>
+      )}
     </>
   );
 }
@@ -1133,6 +1156,34 @@ function ProfilePage({
       <div className="page-heading"><div><span className="eyebrow">PERSONALIZATION</span><h1>{t.profile}</h1><p>{t.profileHelp}</p></div></div>
       <section className="panel profile-form">
         <label>{t.targetRoles}<input value={draft.target_roles.join(", ")} onChange={e=>update({target_roles:splitCsv(e.target.value)})} placeholder="Python Developer, Backend Developer, AI Developer"/></label>
+        <div className="profile-field">
+          <span className="profile-field-label">{locale==="en"?"Target seniority":"Какой грейд ищешь"}</span>
+          <div className="seniority-picker">
+            {[
+              ["intern", locale==="en"?"Intern":"Стажер"],
+              ["junior", locale==="en"?"Junior":"Junior"],
+              ["middle", locale==="en"?"Middle":"Middle"],
+              ["senior", locale==="en"?"Senior":"Senior"],
+              ["lead", locale==="en"?"Lead":"Lead"],
+            ].map(([value,label])=>{
+              const active=draft.seniority_levels.includes(value);
+              return <button
+                key={value}
+                type="button"
+                className={active?"active":""}
+                onClick={()=>update({
+                  seniority_levels: active
+                    ? draft.seniority_levels.filter(item=>item!==value)
+                    : [...draft.seniority_levels,value]
+                })}
+              >
+                {active&&<CheckCircle2 size={14}/>}
+                {label}
+              </button>;
+            })}
+          </div>
+          <small>{locale==="en"?"You can select more than one level, for example Junior + Middle.":"Можно выбрать несколько, например Junior + Middle."}</small>
+        </div>
         <label>{t.skills}<textarea value={draft.skills.join(", ")} onChange={e=>update({skills:splitCsv(e.target.value)})} placeholder="Python, FastAPI, PostgreSQL, Docker, RAG…"/></label>
         <div className="form-grid">
           <label>{t.years}<input type="number" min="0" max="60" value={draft.years_experience} onChange={e=>update({years_experience:Number(e.target.value)})}/></label>
@@ -1157,6 +1208,38 @@ function ProfilePage({
       </section>
     </>
   );
+}
+
+function JobMatchModal({match,locale,onClose}:{match:Match;locale:Locale;onClose:()=>void}) {
+  const t=messages[locale];
+  return <div className="modal-backdrop" onClick={onClose}><div className="modal-card match-modal" onClick={e=>e.stopPropagation()}>
+    <button className="modal-close" onClick={onClose}><X/></button>
+    <span className="eyebrow">MATCH ANALYSIS</span>
+    <div className="match-modal-head">
+      <div><h2>{match.job.title}</h2><p className="muted">{match.job.company} · {match.job.location}</p></div>
+      <div className={`big-score ${match.verdict}`}><strong>{Math.round(match.score)}%</strong><span>{t.fit}</span></div>
+    </div>
+    <div className="analysis-grid">
+      <div>
+        <h4>✓ {t.matchingSkills} <span className="skill-count">{match.matching_skills.length}</span></h4>
+        <div className="skill-row">
+          {match.matching_skills.length
+            ? match.matching_skills.map(skill=><span className="tag positive" key={skill}>{skill}</span>)
+            : <span className="skill-empty">{locale==="en"?"No explicit technical matches detected":"Явных технических совпадений не найдено"}</span>}
+        </div>
+      </div>
+      <div>
+        <h4>! {t.skillGaps} <span className="skill-count">{match.skill_gaps.length}</span></h4>
+        <div className="skill-row">
+          {match.skill_gaps.length
+            ? match.skill_gaps.map(skill=><span className="tag gap" key={skill}>{skill}</span>)
+            : <span className="skill-empty">{locale==="en"?"No additional explicit technical requirements detected in the vacancy text":"В тексте вакансии не найдено дополнительных явных технических требований"}</span>}
+        </div>
+      </div>
+    </div>
+    <div className="reason-list">{match.reasons.map(reason=><span key={reason}>✦ {reason}</span>)}</div>
+    <a className="primary-button link-button" href={match.job.url} target="_blank" rel="noreferrer">{t.openOriginal}<ArrowUpRight size={16}/></a>
+  </div></div>;
 }
 
 function ApplicationModal({application,locale,onClose}:{application:Application;locale:Locale;onClose:()=>void}) {
