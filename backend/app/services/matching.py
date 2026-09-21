@@ -141,6 +141,7 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
     skills = [skill for skill in (profile.skills or []) if skill]
     candidate_keys = _candidate_skill_keys(skills)
     required_keys = _job_skill_keys(job_text)
+    matched_keys = candidate_keys & required_keys
 
     # Preserve the user's original skill names in the UI when possible.
     matching = []
@@ -154,7 +155,6 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
     # De-duplicate while retaining order.
     matching = list(dict.fromkeys(matching))
 
-    matched_keys = candidate_keys & required_keys
     gaps = sorted(required_keys - candidate_keys)
 
     excluded = [word for word in (profile.exclude_keywords or []) if word.lower() in job_text]
