@@ -112,7 +112,7 @@ AI resume profile: {profile.ai_profile or {}}
 Observed JobScout history:
 {stats}
 """
-    parsed = await ask_openai_json(prompt)
+    parsed = await ask_openai_json(prompt, max_output_tokens=800)
     if not parsed:
         insight = fallback
     else:
