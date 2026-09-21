@@ -15,7 +15,8 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:5173"
     openai_api_key: str | None = None
     openai_model: str = "gpt-4.1-mini"
-    openai_timeout_seconds: float = 20.0
+    openai_fast_model: str = "gpt-5.6-luna"
+    openai_timeout_seconds: float = 12.0
     job_scan_limit: int = 100
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
