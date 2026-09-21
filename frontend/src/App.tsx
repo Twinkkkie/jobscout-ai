@@ -221,8 +221,8 @@ function App() {
     try {
       const [statsData, matchData, jobsData, appData, profileData, agentStatusData] = await Promise.all([
         api("/dashboard/stats"),
-        api("/jobs/matches?limit=50"),
-        api("/jobs?limit=80"),
+        api("/jobs/matches?limit=200"),
+        api("/jobs?limit=200"),
         api("/applications"),
         api("/profile"),
         api("/agents/status"),
@@ -828,8 +828,8 @@ function MatchRow({
       <div className="match-main">
         <div className="match-heading">
           <div>
-            <h3>{match.job.title}</h3>
-            <p>{match.job.company} · {match.job.location || match.job.remote_region}</p>
+            <h3>{decodeHtmlEntities(match.job.title)}</h3>
+            <p>{decodeHtmlEntities(match.job.company)} · {decodeHtmlEntities(match.job.location || match.job.remote_region)}</p>
           </div>
           <div className={`score-ring ${match.verdict}`}><strong>{Math.round(match.score)}%</strong><span>{t.fit}</span></div>
         </div>
@@ -1065,7 +1065,7 @@ function MatchesPage({
           return (
             <article className="panel match-detail" key={match.id}>
               <div className="match-detail-top">
-                <div><span className={`verdict ${match.verdict}`}>{t[match.verdict]}</span><h2>{match.job.title}</h2><p>{match.job.company} · {match.job.location}</p></div>
+                <div><span className={`verdict ${match.verdict}`}>{t[match.verdict]}</span><h2>{decodeHtmlEntities(match.job.title)}</h2><p>{decodeHtmlEntities(match.job.company)} · {decodeHtmlEntities(match.job.location || match.job.remote_region)}</p></div>
                 <div className={`big-score ${match.verdict}`}><strong>{Math.round(match.score)}%</strong><span>{t.fit}</span></div>
               </div>
               <div className="analysis-grid">
