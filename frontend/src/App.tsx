@@ -1360,7 +1360,7 @@ function ProfilePage({
         <label>{locale==="en"?"Professional summary":"О себе"}<textarea value={draft.summary} onChange={e=>update({summary:e.target.value})}/></label>
         <div className="profile-save-row">
           <button className={"primary-button profile-save "+(saveState==="saved"?"saved":"")} disabled={saveState==="saving"} onClick={save}>{buttonText}</button>
-          {saveState==="saved"&&<span className="save-success">{locale==="en"?"Profile saved ✓ Matches are recalculating in the background.":"Профиль сохранен ✓ Мэтчи пересчитываются в фоне."}</span>}
+          {saveState==="saved"&&<span className="save-success">{locale==="en"?"Profile saved ✓ Matches updated.":"Профиль сохранен ✓ Мэтчи обновлены."}</span>}
           {saveState==="error"&&<span className="save-error">{saveError}</span>}
         </div>
       </section>
