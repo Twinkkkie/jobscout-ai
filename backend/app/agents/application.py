@@ -1,4 +1,3 @@
-from datetime import UTC, datetime
 from typing import Any, TypedDict
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,7 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import CandidateProfile, Job
 from app.services.application_ai import prepare_application_pack
 from app.services.matching import score_job
-from app.services.vacancy_ai import analyze_vacancy_ai
 
 try:
     from langgraph.graph import END, StateGraph
@@ -24,17 +22,6 @@ class ApplicationAgentState(TypedDict, total=False):
     pack: dict[str, Any]
     review: dict[str, Any]
     trace: list[str]
-
-
-async def _analyze_vacancy(state: ApplicationAgentState) -> dict:
-    job = state["job"]
-    if not ((job.ai_analysis or {}).get("ai_enriched") and (job.ai_analysis or {}).get("analysis_version") == 3):
-        analysis = await analyze_vacancy_ai(job)
-        job.ai_analysis = analysis
-        if analysis.get("ai_enriched"):
-            job.ai_analyzed_at = datetime.now(UTC)
-        await state["db"].commit()
-    return {"trace": state.get("trace", []) + ["vacancy_analysis"]}
 
 
 async def _calculate_match(state: ApplicationAgentState) -> dict:
@@ -89,7 +76,7 @@ async def _fact_check(state: ApplicationAgentState) -> dict:
 
 
 async def _run_sequential(state: ApplicationAgentState) -> ApplicationAgentState:
-    for node in (_analyze_vacancy, _calculate_match, _generate_pack, _fact_check):
+    for node in (_calculate_match, _generate_pack, _fact_check):
         state.update(await node(state))
     return state
 
@@ -112,12 +99,10 @@ async def run_application_agent(
         result = await _run_sequential(state)
     else:
         graph = StateGraph(ApplicationAgentState)
-        graph.add_node("vacancy", _analyze_vacancy)
         graph.add_node("match", _calculate_match)
         graph.add_node("generate", _generate_pack)
         graph.add_node("fact_check", _fact_check)
-        graph.set_entry_point("vacancy")
-        graph.add_edge("vacancy", "match")
+        graph.set_entry_point("match")
         graph.add_edge("match", "generate")
         graph.add_edge("generate", "fact_check")
         graph.add_edge("fact_check", END)
