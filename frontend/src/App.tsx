@@ -7,6 +7,7 @@ import {
   Heart,
   Home,
   Languages,
+  LoaderCircle,
   LogOut,
   Menu,
   Search,
@@ -182,6 +183,8 @@ function App() {
   const [scanNotice, setScanNotice] = useState("");
   const [error, setError] = useState("");
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
+  const [preparingApplication, setPreparingApplication] = useState<Job | null>(null);
+  const [prepareStage, setPrepareStage] = useState("");
   const [careerInsight, setCareerInsight] = useState<CareerInsight | null>(null);
   const [careerLoading, setCareerLoading] = useState(false);
   const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
@@ -351,6 +354,70 @@ function App() {
     }
   };
 
+  const prepareApplication = async (jobId: string) => {
+    const job =
+      jobs.find(item => item.id === jobId) ||
+      matches.find(item => item.job.id === jobId)?.job ||
+      applications.find(item => item.job.id === jobId)?.job;
+
+    if (job) setPreparingApplication(job);
+    setPrepareStage(locale === "en" ? "Starting Application Agent…" : "Запускаем Application Agent…");
+    setError("");
+
+    try {
+      const queued = await api(`/applications/${jobId}/prepare`, { method: "POST" });
+
+      if (queued.status === "ready" && queued.application) {
+        setSelectedApplication(queued.application as Application);
+        setPreparingApplication(null);
+        setPrepareStage("");
+        return;
+      }
+
+      const taskId = queued.task_id as string | undefined;
+      if (!taskId) throw new Error(locale === "en" ? "Could not start application preparation." : "Не удалось запустить подготовку отклика.");
+
+      for (let attempt = 0; attempt < 120; attempt += 1) {
+        await new Promise(resolve => window.setTimeout(resolve, 500));
+        const state = await api(`/jobs/scan/${taskId}`);
+
+        const stage = state.meta?.stage as string | undefined;
+        if (stage === "loading_context") {
+          setPrepareStage(locale === "en" ? "Loading your profile, resume and vacancy…" : "Загружаем профиль, резюме и вакансию…");
+        } else if (stage === "generating_pack") {
+          setPrepareStage(locale === "en" ? "AI is tailoring your application pack…" : "AI готовит персональный пакет отклика…");
+        } else if (stage === "saving_pack") {
+          setPrepareStage(locale === "en" ? "Finalizing the application…" : "Финализируем отклик…");
+        }
+
+        if (state.status === "success") {
+          const prepared = await api(`/applications/${jobId}`);
+          setSelectedApplication(prepared as Application);
+          setApplications(current => {
+            const exists = current.some(item => item.job.id === jobId);
+            return exists
+              ? current.map(item => item.job.id === jobId ? prepared : item)
+              : [prepared, ...current];
+          });
+          setPreparingApplication(null);
+          setPrepareStage("");
+          void refresh();
+          return;
+        }
+
+        if (state.status === "failure") {
+          throw new Error(state.error || (locale === "en" ? "Application preparation failed." : "Не удалось подготовить отклик."));
+        }
+      }
+
+      throw new Error(locale === "en" ? "Application preparation is still queued. Try again in a moment." : "Подготовка отклика все еще в очереди. Попробуй снова через несколько секунд.");
+    } catch (err) {
+      setPreparingApplication(null);
+      setPrepareStage("");
+      setError(err instanceof Error ? err.message : (locale === "en" ? "Application preparation failed." : "Не удалось подготовить отклик."));
+    }
+  };
+
   if (!token) {
     return (
       <AuthScreen
@@ -478,11 +545,7 @@ function App() {
                   setCareerLoading(false);
                 }
               }}
-              onPrepare={async (jobId) => {
-                const app = await api(`/applications/${jobId}/prepare`, { method: "POST" });
-                setSelectedApplication(app);
-                await refresh();
-              }}
+              onPrepare={prepareApplication}
             />
           )}
 
@@ -547,11 +610,7 @@ function App() {
               matches={matches}
               applications={applications}
               locale={locale}
-              onPrepare={async (jobId) => {
-                const app = await api(`/applications/${jobId}/prepare`, { method: "POST" });
-                setSelectedApplication(app);
-                await refresh();
-              }}
+              onPrepare={prepareApplication}
               onApplied={async (jobId) => {
                 await api(`/applications/${jobId}`, {
                   method: "PUT",
@@ -627,6 +686,14 @@ function App() {
           </button>
         ))}
       </nav>
+
+      {preparingApplication && (
+        <ApplicationPreparingModal
+          job={preparingApplication}
+          locale={locale}
+          stage={prepareStage}
+        />
+      )}
 
       {selectedApplication && (
         <ApplicationModal
@@ -1526,6 +1593,23 @@ function JobMatchModal({match,locale,onClose}:{match:Match;locale:Locale;onClose
     <div className="reason-list">{match.reasons.map(reason=><span key={reason}>✦ {reason}</span>)}</div>
     <a className="primary-button link-button" href={match.job.url} target="_blank" rel="noreferrer">{t.openOriginal}<ArrowUpRight size={16}/></a>
   </div></div>;
+}
+
+function ApplicationPreparingModal({job,locale,stage}:{job:Job;locale:Locale;stage:string}) {
+  return <div className="modal-backdrop">
+    <div className="modal-card application-preparing-modal">
+      <div className="preparing-orb"><LoaderCircle size={32}/></div>
+      <span className="eyebrow">APPLICATION AGENT</span>
+      <h2>{locale==="en"?"Preparing your application…":"Готовим отклик…"}</h2>
+      <p className="muted">{decodeHtmlEntities(job.title)} · {decodeHtmlEntities(job.company)}</p>
+      <div className="preparing-stage"><LoaderCircle size={17}/><span>{stage}</span></div>
+      <p className="preparing-hint">
+        {locale==="en"
+          ?"The interface is responsive; generation runs in the background and the finished pack will open automatically."
+          :"Генерация идет в фоне. Готовый пакет откроется автоматически сразу после завершения."}
+      </p>
+    </div>
+  </div>;
 }
 
 function ApplicationModal({application,locale,onClose}:{application:Application;locale:Locale;onClose:()=>void}) {
