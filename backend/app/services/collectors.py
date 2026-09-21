@@ -60,7 +60,7 @@ def _annualize(value: int | float | None, period: str | None) -> int | None:
 
 async def collect_remoteok(limit: int = 50) -> list[CollectedJob]:
     headers = {"User-Agent": "JobScoutAI/0.1 (+https://github.com/Twinkkkie/jobscout-ai)"}
-    async with httpx.AsyncClient(timeout=25, headers=headers) as client:
+    async with httpx.AsyncClient(timeout=12, headers=headers) as client:
         response = await client.get("https://remoteok.com/api")
         response.raise_for_status()
         payload: list[dict[str, Any]] = response.json()
@@ -93,7 +93,7 @@ async def collect_remoteok(limit: int = 50) -> list[CollectedJob]:
 
 async def collect_wwr(limit: int = 50) -> list[CollectedJob]:
     url = "https://weworkremotely.com/categories/remote-programming-jobs.rss"
-    async with httpx.AsyncClient(timeout=25) as client:
+    async with httpx.AsyncClient(timeout=12) as client:
         response = await client.get(url)
         response.raise_for_status()
 
@@ -133,7 +133,7 @@ async def collect_himalayas(limit: int = 40) -> list[CollectedJob]:
     jobs: list[CollectedJob] = []
     cursor: str | None = None
 
-    async with httpx.AsyncClient(timeout=25) as client:
+    async with httpx.AsyncClient(timeout=12) as client:
         while len(jobs) < limit:
             params: dict[str, Any] = {"limit": min(20, limit - len(jobs))}
             if cursor:
@@ -173,7 +173,7 @@ async def collect_himalayas(limit: int = 40) -> list[CollectedJob]:
 
 
 async def collect_jobicy(limit: int = 50) -> list[CollectedJob]:
-    async with httpx.AsyncClient(timeout=25) as client:
+    async with httpx.AsyncClient(timeout=12) as client:
         response = await client.get(
             "https://jobicy.com/api/v2/remote-jobs",
             params={"count": min(100, limit), "industry": "engineering"},
@@ -207,7 +207,7 @@ async def collect_jobicy(limit: int = 50) -> list[CollectedJob]:
 
 async def collect_arbeitnow(limit: int = 50) -> list[CollectedJob]:
     """Collect fresh Europe/Germany jobs from Arbeitnow's public job-board API."""
-    async with httpx.AsyncClient(timeout=25, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
         response = await client.get("https://www.arbeitnow.com/api/job-board-api")
         response.raise_for_status()
         payload = response.json()
