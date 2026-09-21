@@ -95,6 +95,13 @@ function splitCsv(value: string) {
     .filter(Boolean);
 }
 
+function decodeHtmlEntities(value: string) {
+  if (!value) return "";
+  const textarea = document.createElement("textarea");
+  textarea.innerHTML = value;
+  return textarea.value;
+}
+
 function salary(job: Job, unknown: string) {
   if (!job.salary_min && !job.salary_max) return unknown;
   const formatter = new Intl.NumberFormat("en-US", {
@@ -774,11 +781,16 @@ function JobsPage({
           const status=statusByJob.get(job.id);
           const label=trackerLabel(status);
           const locked=Boolean(status && status!=="saved");
+          const match=matchByJob.get(job.id);
+          const title=decodeHtmlEntities(job.title);
+          const company=decodeHtmlEntities(job.company);
+          const visibleTags=(job.tags || []).slice(0,4);
+          const hiddenTags=Math.max(0,(job.tags || []).length-visibleTags.length);
           return (
             <article className="job-card" key={job.id}>
               <div className="job-card-head">
                 <div className="job-card-leading">
-                  <div className="company-badge">{job.company.slice(0,1).toUpperCase()}</div>
+                  <div className="company-badge">{company.slice(0,1).toUpperCase()}</div>
                   {Date.now()-new Date(job.collected_at).getTime() < 24*60*60*1000 && (
                     <span className="new-job-badge">{locale==="en"?"NEW":"НОВАЯ"}</span>
                   )}
@@ -797,20 +809,41 @@ function JobsPage({
                   </span>
                 </button>
               </div>
-              <h3>{job.title}</h3>
-              <p>{job.company}</p>
-              <div className="job-meta"><span>🌐 {job.location || job.remote_region}</span><span>{salary(job,t.salaryUnknown)}</span></div>
-              <div className="skill-row">{job.tags.slice(0,5).map(tag=><span className="tag" key={tag}>{tag}</span>)}</div>
-              <div className="job-actions">
-                <span className="source-label">{job.source}</span>
-                {matchByJob.get(job.id)&&(
-                  <button className="soft-button match-check-button" onClick={()=>setSelectedMatch(matchByJob.get(job.id) || null)}>
-                    <Target size={15}/>
-                    {locale==="en"?"Check match":"Проверить мэтч"}
-                    <strong>{Math.round(matchByJob.get(job.id)!.score)}%</strong>
-                  </button>
-                )}
-                <a className="soft-button" href={job.url} target="_blank" rel="noreferrer">{t.openOriginal}<ArrowUpRight size={15}/></a>
+
+              <div className="job-card-content">
+                <h3 className="job-card-title" title={title}>{title}</h3>
+                <p className="job-card-company" title={company}>{company}</p>
+
+                <div className="job-meta">
+                  <span className="job-meta-line">🌐 <span>{decodeHtmlEntities(job.location || job.remote_region)}</span></span>
+                  <span className="job-meta-line">{salary(job,t.salaryUnknown)}</span>
+                </div>
+
+                <div className="job-tags">
+                  {visibleTags.map((tag,index)=><span className="tag" key={`${tag}-${index}`}>{decodeHtmlEntities(String(tag))}</span>)}
+                  {hiddenTags>0&&<span className="tag tag-more">+{hiddenTags}</span>}
+                </div>
+              </div>
+
+              <div className="job-card-footer">
+                <span className="source-label" title={job.source}>{job.source}</span>
+                <div className="job-actions">
+                  {match&&(
+                    <button
+                      className="soft-button match-check-button"
+                      onClick={()=>setSelectedMatch(match)}
+                      title={locale==="en"?"Open match analysis":"Открыть анализ мэтча"}
+                    >
+                      <Target size={15}/>
+                      <span className="match-check-label">{locale==="en"?"Match":"Мэтч"}</span>
+                      <span className="match-score-badge">{Math.round(match.score)}%</span>
+                    </button>
+                  )}
+                  <a className="soft-button open-job-button" href={job.url} target="_blank" rel="noreferrer">
+                    <span>{locale==="en"?"Open":"Открыть"}</span>
+                    <ArrowUpRight size={15}/>
+                  </a>
+                </div>
               </div>
             </article>
           );
