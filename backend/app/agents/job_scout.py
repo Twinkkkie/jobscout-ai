@@ -79,7 +79,7 @@ async def _enrich_vacancies(state: JobScoutState) -> dict:
     candidates = [
         job
         for job in recent_jobs
-        if not (job.ai_analysis or {}).get("ai_enriched")
+        if not ((job.ai_analysis or {}).get("ai_enriched") and (job.ai_analysis or {}).get("analysis_version") == 2)
         and score_job(profile, job)["score"] >= 40
     ]
     candidates.sort(key=lambda job: score_job(profile, job)["score"], reverse=True)
