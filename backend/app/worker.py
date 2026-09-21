@@ -130,7 +130,7 @@ async def _enrich_user_jobs(user_id: str) -> dict:
         }
 
 
-async def _analyze_job_match(user_id: str, job_id: str) -> dict:
+async def _analyze_job_match(user_id: str, job_id: str, locale: str = "en") -> dict:
     async with _worker_db() as db:
         profile = await db.scalar(
             select(CandidateProfile).where(CandidateProfile.user_id == UUID(user_id))
@@ -161,7 +161,7 @@ async def _analyze_job_match(user_id: str, job_id: str) -> dict:
         match.skill_gaps = scored["skill_gaps"]
         match.reasons = scored["reasons"]
         match.verdict = scored["verdict"]
-        match.ai_explanation = await explain_match_ai(profile, job, scored)
+        match.ai_explanation = await explain_match_ai(profile, job, scored, locale=locale)
 
         await db.commit()
         return {
@@ -353,8 +353,8 @@ def enrich_resume_task(user_id: str, resume_id: str) -> dict:
 
 
 @celery_app.task
-def analyze_job_match_task(user_id: str, job_id: str) -> dict:
-    return asyncio.run(_analyze_job_match(user_id, job_id))
+def analyze_job_match_task(user_id: str, job_id: str, locale: str = "en") -> dict:
+    return asyncio.run(_analyze_job_match(user_id, job_id, locale))
 
 
 @celery_app.task
