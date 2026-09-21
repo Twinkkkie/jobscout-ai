@@ -9,11 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.agents.job_scout import run_job_scout_agent
 from app.core.config import settings
-from app.models import CandidateProfile, Job
+from app.models import CandidateProfile, Job, JobMatch
 from app.services.availability import verify_job_availability
+from app.services.match_ai import explain_match_ai
 from app.services.matching import score_job
 from app.services.orchestrator import rebuild_matches, sync_jobs
-from app.services.vacancy_ai import analyze_vacancies_batch_ai
+from app.services.vacancy_ai import analyze_vacancy_ai, analyze_vacancies_batch_ai
 
 celery_app = Celery("jobscout", broker=settings.redis_url, backend=settings.redis_url)
 celery_app.conf.update(
@@ -126,6 +127,51 @@ async def _enrich_user_jobs(user_id: str) -> dict:
         }
 
 
+async def _analyze_job_match(user_id: str, job_id: str) -> dict:
+    async with _worker_db() as db:
+        profile = await db.scalar(
+            select(CandidateProfile).where(CandidateProfile.user_id == UUID(user_id))
+        )
+        job = await db.get(Job, UUID(job_id))
+        if profile is None or job is None:
+            return {"updated": False, "job_id": job_id}
+
+        if settings.openai_api_key:
+            analysis = await analyze_vacancy_ai(job)
+            job.ai_analysis = analysis
+            if analysis.get("ai_enriched"):
+                job.ai_analyzed_at = datetime.now(UTC)
+
+        scored = score_job(profile, job)
+        match = await db.scalar(
+            select(JobMatch).where(
+                JobMatch.user_id == profile.user_id,
+                JobMatch.job_id == job.id,
+            )
+        )
+        if match is None:
+            match = JobMatch(user_id=profile.user_id, job_id=job.id)
+            db.add(match)
+
+        match.score = scored["score"]
+        match.matching_skills = scored["matching_skills"]
+        match.skill_gaps = scored["skill_gaps"]
+        match.reasons = scored["reasons"]
+        match.verdict = scored["verdict"]
+        match.ai_explanation = await explain_match_ai(profile, job, scored)
+
+        await db.commit()
+        return {
+            "updated": True,
+            "job_id": str(job.id),
+            "score": match.score,
+            "ai_enriched": bool(
+                (job.ai_analysis or {}).get("ai_enriched")
+                and (job.ai_analysis or {}).get("analysis_version") == 3
+            ),
+        }
+
+
 async def _scan_all(limit: int) -> dict:
     async with _worker_db() as db:
         new_jobs = await sync_jobs(db, limit)
@@ -193,6 +239,11 @@ def scan_jobs_task(limit: int = 100, user_id: str | None = None) -> dict:
         result["ai_enrichment_queued"] = False
         result["ai_task_id"] = None
     return result
+
+
+@celery_app.task
+def analyze_job_match_task(user_id: str, job_id: str) -> dict:
+    return asyncio.run(_analyze_job_match(user_id, job_id))
 
 
 @celery_app.task
