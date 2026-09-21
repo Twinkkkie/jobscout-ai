@@ -512,6 +512,7 @@ function App() {
                   body: JSON.stringify(value),
                 });
                 setProfile(saved);
+                await refresh();
               }}
             />
           )}
