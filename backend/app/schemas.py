@@ -49,6 +49,8 @@ class ProfileRead(ProfileUpdate):
     user_id: UUID
     ai_profile: dict = {}
     ai_profile_updated_at: datetime | None = None
+    rematch_queued: bool = False
+    rematch_task_id: str | None = None
 
 
 class ResumeRead(BaseModel):
