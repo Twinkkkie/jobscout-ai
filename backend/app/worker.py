@@ -1,4 +1,5 @@
 import asyncio
+from datetime import UTC, datetime
 from uuid import UUID
 
 from celery import Celery
@@ -60,14 +61,24 @@ async def _scan_all(limit: int) -> dict:
             ).scalars().all()
         )
         enriched = 0
-        for job in recent_jobs:
-            if (job.ai_analysis or {}).get("ai_enriched"):
-                continue
-            analysis = await analyze_vacancy_ai(job)
-            job.ai_analysis = analysis
-            if analysis.get("ai_enriched"):
-                enriched += 1
-        await db.commit()
+        if settings.openai_api_key:
+            candidates = [
+                job for job in recent_jobs
+                if not (job.ai_analysis or {}).get("ai_enriched")
+            ][:20]
+            semaphore = asyncio.Semaphore(4)
+
+            async def enrich(job: Job) -> tuple[Job, dict]:
+                async with semaphore:
+                    return job, await analyze_vacancy_ai(job)
+
+            analyses = await asyncio.gather(*(enrich(job) for job in candidates))
+            for job, analysis in analyses:
+                job.ai_analysis = analysis
+                if analysis.get("ai_enriched"):
+                    job.ai_analyzed_at = datetime.now(UTC)
+                    enriched += 1
+            await db.commit()
 
         result = await db.execute(select(CandidateProfile))
         profiles = list(result.scalars().all())
