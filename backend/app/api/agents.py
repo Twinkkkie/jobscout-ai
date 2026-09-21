@@ -34,7 +34,7 @@ async def career_insight(
 async def agent_status(user: User = Depends(get_current_user)) -> dict:
     return {
         "openai_configured": bool(settings.openai_api_key),
-        "model": settings.openai_model,
+        "model": settings.openai_fast_model,
         "langgraph_available": importlib.util.find_spec("langgraph") is not None,
         "agents": ["job_scout", "application", "career"],
         "human_review_required": True,
