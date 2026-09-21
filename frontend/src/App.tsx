@@ -471,15 +471,40 @@ function App() {
               scanning={scanning}
               scanNotice={scanNotice}
               onAnalyzeMatch={async (jobId) => {
+                const applyMatch = (analyzed: Match) => {
+                  setMatches(current => {
+                    const exists = current.some(item => item.job.id === analyzed.job.id);
+                    const next = exists
+                      ? current.map(item => item.job.id === analyzed.job.id ? analyzed : item)
+                      : [analyzed, ...current];
+                    return [...next].sort((a,b) => b.score - a.score);
+                  });
+                };
+
                 const result = await api(`/jobs/${jobId}/match-analysis`, { method: "POST" });
                 const analyzed = result.match as Match;
-                setMatches(current => {
-                  const exists = current.some(item => item.job.id === analyzed.job.id);
-                  const next = exists
-                    ? current.map(item => item.job.id === analyzed.job.id ? analyzed : item)
-                    : [analyzed, ...current];
-                  return [...next].sort((a,b) => b.score - a.score);
-                });
+                applyMatch(analyzed);
+
+                if (result.ai_pending && result.task_id) {
+                  const taskId = result.task_id as string;
+                  void (async () => {
+                    for (let attempt = 0; attempt < 24; attempt += 1) {
+                      await new Promise(resolve => window.setTimeout(resolve, 500));
+                      try {
+                        const state = await api(`/jobs/scan/${taskId}`);
+                        if (state.status === "success") {
+                          const refined = await api(`/jobs/${jobId}/match-analysis`, { method: "POST" });
+                          applyMatch(refined.match as Match);
+                          break;
+                        }
+                        if (state.status === "failure") break;
+                      } catch {
+                        break;
+                      }
+                    }
+                  })();
+                }
+
                 return analyzed;
               }}
             />
@@ -885,6 +910,12 @@ function JobsPage({
     () => new Map(applications.map(application => [application.job.id, application.status])),
     [applications]
   );
+
+  useEffect(()=>{
+    if(!selectedMatch) return;
+    const latest=matchByJob.get(selectedMatch.job.id);
+    if(latest && latest!==selectedMatch) setSelectedMatch(latest);
+  },[matches,selectedMatch?.job.id]);
 
   const saveJob=async(jobId:string)=>{
     setSavingId(jobId);
