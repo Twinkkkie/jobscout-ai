@@ -799,8 +799,32 @@ function ProfilePage({
 }) {
   const t=messages[locale];
   const [draft,setDraft]=useState(profile);
+  const [saveState,setSaveState]=useState<"idle"|"saving"|"saved"|"error">("idle");
+  const [saveError,setSaveError]=useState("");
   useEffect(()=>setDraft(profile),[profile]);
-  const update=(patch:Partial<Profile>)=>setDraft(current=>({...current,...patch}));
+  const update=(patch:Partial<Profile>)=>{
+    setDraft(current=>({...current,...patch}));
+    setSaveState("idle");
+    setSaveError("");
+  };
+  const save=async()=>{
+    setSaveState("saving");
+    setSaveError("");
+    try{
+      await onSave(draft);
+      setSaveState("saved");
+      window.setTimeout(()=>setSaveState(current=>current==="saved"?"idle":current),2500);
+    }catch(err){
+      setSaveError(err instanceof Error?err.message:"Save failed");
+      setSaveState("error");
+    }
+  };
+  const buttonText =
+    saveState==="saving"
+      ? (locale==="en"?"Saving…":"Сохраняем…")
+      : saveState==="saved"
+        ? (locale==="en"?"Saved ✓":"Сохранено ✓")
+        : t.saveProfile;
   return (
     <>
       <div className="page-heading"><div><span className="eyebrow">PERSONALIZATION</span><h1>{t.profile}</h1><p>{t.profileHelp}</p></div></div>
@@ -818,7 +842,11 @@ function ProfilePage({
         </div>
         <label>{t.exclude}<input value={draft.exclude_keywords.join(", ")} onChange={e=>update({exclude_keywords:splitCsv(e.target.value)})} placeholder="onsite, PHP, 7+ years"/></label>
         <label>{locale==="en"?"Professional summary":"О себе"}<textarea value={draft.summary} onChange={e=>update({summary:e.target.value})}/></label>
-        <button className="primary-button profile-save" onClick={()=>onSave(draft)}>{t.saveProfile}</button>
+        <div className="profile-save-row">
+          <button className={"primary-button profile-save "+(saveState==="saved"?"saved":"")} disabled={saveState==="saving"} onClick={save}>{buttonText}</button>
+          {saveState==="saved"&&<span className="save-success">{locale==="en"?"Profile updated successfully":"Профиль успешно обновлен"}</span>}
+          {saveState==="error"&&<span className="save-error">{saveError}</span>}
+        </div>
       </section>
       <section className="panel install-guide">
         <img src="/brand-icon.svg" alt=""/>
