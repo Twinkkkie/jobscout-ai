@@ -138,3 +138,8 @@ button{cursor:pointer}
 .delete-saved-button{border:1px solid #f1d7dd;background:#fff;color:#9a4459;border-radius:9px;min-height:34px;padding:0 9px;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;cursor:pointer}
 .delete-saved-button:hover:not(:disabled){background:#fff4f6}
 .delete-saved-button:disabled{opacity:.65;cursor:default}
+
+.scan-feedback{display:flex;align-items:center;gap:8px;margin-bottom:14px;background:#f5f1ff;border:1px solid #e5dafb;color:#6748a8;border-radius:11px;padding:10px 12px;font-size:12px;font-weight:800}
+.job-card-leading{display:flex;align-items:center;gap:8px}
+.new-job-badge{font-size:9px;font-weight:900;letter-spacing:.06em;background:var(--green-bg);color:var(--green);border:1px solid #cdeede;border-radius:999px;padding:4px 7px}
+.status-pill.closed{background:#f2f3f5;color:#7d8491!important;text-decoration:none}
