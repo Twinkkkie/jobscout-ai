@@ -13,6 +13,7 @@ import {
   Settings2,
   Sparkles,
   Target,
+  Trash2,
   Upload,
   UserRound,
   X,
@@ -383,7 +384,14 @@ function App() {
           )}
 
           {page === "applications" && (
-            <ApplicationsPage applications={applications} locale={locale} />
+            <ApplicationsPage
+              applications={applications}
+              locale={locale}
+              onDeleteSaved={async (jobId) => {
+                await api(`/applications/${jobId}`, { method: "DELETE" });
+                await refresh();
+              }}
+            />
           )}
 
           {page === "resume" && (
@@ -847,25 +855,108 @@ function MatchesPage({
 }
 
 
-function ApplicationsPage({ applications, locale }: { applications: Application[]; locale: Locale }) {
+function ApplicationsPage({
+  applications,
+  locale,
+  onDeleteSaved,
+}: {
+  applications: Application[];
+  locale: Locale;
+  onDeleteSaved: (jobId: string) => Promise<void>;
+}) {
   const t = messages[locale];
+  const [tab,setTab]=useState<"saved"|"pipeline">("saved");
+  const [removingId,setRemovingId]=useState<string|null>(null);
+  const [feedback,setFeedback]=useState("");
+
+  const saved = applications.filter(app => app.status === "saved");
+  const pipeline = applications.filter(app => app.status !== "saved");
+  const visible = tab === "saved" ? saved : pipeline;
+
+  const removeSaved=async(jobId:string)=>{
+    setRemovingId(jobId);
+    setFeedback("");
+    try{
+      await onDeleteSaved(jobId);
+      setFeedback(locale==="en"?"Removed from saved vacancies":"Удалено из сохраненных вакансий");
+      window.setTimeout(()=>setFeedback(""),2200);
+    }catch(err){
+      setFeedback(err instanceof Error?err.message:(locale==="en"?"Could not remove vacancy":"Не удалось удалить вакансию"));
+    }finally{
+      setRemovingId(null);
+    }
+  };
+
+  const statusLabel=(status:string)=>{
+    const labels:Record<string,string> = locale==="en"
+      ? {applied:"Applied",interview:"Interview",offer:"Offer",rejected:"Rejected",withdrawn:"Withdrawn"}
+      : {applied:"Отклик отправлен",interview:"Собеседование",offer:"Оффер",rejected:"Отказ",withdrawn:"Отозвано"};
+    return labels[status] || status;
+  };
+
   return (
     <>
-      <div className="page-heading"><div><span className="eyebrow">PIPELINE</span><h1>{t.tracker}</h1><p>{locale === "en" ? "Everything you applied to, in one place." : "Все твои отклики и их статусы в одном месте."}</p></div></div>
+      <div className="page-heading">
+        <div>
+          <span className="eyebrow">TRACKER</span>
+          <h1>{t.tracker}</h1>
+          <p>{locale === "en" ? "Keep saved vacancies separate from jobs you have already applied to." : "Сохраненные вакансии отдельно от тех, на которые ты уже откликнулась."}</p>
+        </div>
+      </div>
+
+      <div className="tracker-tabs">
+        <button className={tab==="saved"?"active":""} onClick={()=>setTab("saved")}>
+          <Bookmark size={16}/>
+          {locale==="en"?"Saved":"Сохраненные"}
+          <span>{saved.length}</span>
+        </button>
+        <button className={tab==="pipeline"?"active":""} onClick={()=>setTab("pipeline")}>
+          <CheckCircle2 size={16}/>
+          {locale==="en"?"Applications":"Отклики"}
+          <span>{pipeline.length}</span>
+        </button>
+      </div>
+
+      {feedback&&<div className="action-feedback"><CheckCircle2 size={17}/><span>{feedback}</span></div>}
+
       <section className="panel table-panel">
-        {applications.map(app=>(
+        {visible.map(app=>(
           <div className="application-row" key={app.id}>
             <div className="company-badge">{app.job.company.slice(0,1).toUpperCase()}</div>
             <div><strong>{app.job.title}</strong><span>{app.job.company}</span></div>
-            <span className={`status-pill ${app.status}`}>{app.status}</span>
-            <a href={app.job.url} target="_blank" rel="noreferrer"><ArrowUpRight size={18}/></a>
+            <span className={`status-pill ${app.status}`}>
+              {tab==="saved" ? (locale==="en"?"Saved":"Сохранено") : statusLabel(app.status)}
+            </span>
+            <div className="application-actions">
+              <a href={app.job.url} target="_blank" rel="noreferrer" title={locale==="en"?"Open vacancy":"Открыть вакансию"}><ArrowUpRight size={18}/></a>
+              {tab==="saved"&&(
+                <button
+                  className="delete-saved-button"
+                  onClick={()=>removeSaved(app.job.id)}
+                  disabled={removingId===app.job.id}
+                  title={locale==="en"?"Remove from saved":"Удалить из сохраненных"}
+                >
+                  <Trash2 size={16}/>
+                  <span>{removingId===app.job.id?(locale==="en"?"Removing…":"Удаляем…"):(locale==="en"?"Remove":"Удалить")}</span>
+                </button>
+              )}
+            </div>
           </div>
         ))}
-        {!applications.length && <EmptyState text={t.noApplications}/>}
+        {!visible.length && (
+          <EmptyState
+            text={
+              tab==="saved"
+                ? (locale==="en"?"No saved vacancies yet.":"Сохраненных вакансий пока нет.")
+                : (locale==="en"?"No applications yet.":"Откликов пока нет.")
+            }
+          />
+        )}
       </section>
     </>
   );
 }
+
 
 function ResumePage({
   locale,
