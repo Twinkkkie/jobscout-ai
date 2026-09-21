@@ -42,6 +42,17 @@ async def _scan(limit: int, user_id: str | None) -> dict:
         }
 
 
+async def _rematch_user(user_id: str) -> dict:
+    async with SessionLocal() as db:
+        profile = await db.scalar(
+            select(CandidateProfile).where(CandidateProfile.user_id == UUID(user_id))
+        )
+        if profile is None:
+            return {"matched": 0}
+        matched = await rebuild_matches(db, profile)
+        return {"matched": matched}
+
+
 async def _scan_all(limit: int) -> dict:
     async with SessionLocal() as db:
         new_jobs = await sync_jobs(db, limit)
@@ -67,3 +78,9 @@ def scan_jobs_task(limit: int = 100, user_id: str | None = None) -> dict:
 @celery_app.task
 def scan_all_users_task(limit: int = 100) -> dict:
     return asyncio.run(_scan_all(limit))
+
+
+
+@celery_app.task
+def rebuild_matches_task(user_id: str) -> dict:
+    return asyncio.run(_rematch_user(user_id))
