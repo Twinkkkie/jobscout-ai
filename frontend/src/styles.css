@@ -128,3 +128,13 @@ button{cursor:pointer}
 .applied-action.done{background:var(--green-bg);border-color:#cdeede;color:var(--green)}
 .applied-action:disabled{cursor:default;opacity:1}
 @media(max-width:780px){.action-feedback{top:72px;width:100%;margin-bottom:12px}.save-job-button span{display:inline}.job-card-head{align-items:center}}
+
+.tracker-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.tracker-tabs button{border:1px solid var(--line);background:#fff;color:#687286;border-radius:11px;padding:9px 12px;display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:800;cursor:pointer}
+.tracker-tabs button.active{background:var(--rose-50);border-color:var(--rose-200);color:var(--rose-600)}
+.tracker-tabs button span{display:grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:#f1f2f5;font-size:10px}
+.tracker-tabs button.active span{background:#fff}
+.application-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px}
+.delete-saved-button{border:1px solid #f1d7dd;background:#fff;color:#9a4459;border-radius:9px;min-height:34px;padding:0 9px;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;cursor:pointer}
+.delete-saved-button:hover:not(:disabled){background:#fff4f6}
+.delete-saved-button:disabled{opacity:.65;cursor:default}
