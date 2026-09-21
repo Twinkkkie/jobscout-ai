@@ -17,7 +17,7 @@ celery_app.conf.update(
     beat_schedule={
         "scan-public-jobs-hourly": {
             "task": "app.worker.scan_all_users_task",
-            "schedule": 3600.0,
+            "schedule": 21600.0,
         }
     },
 )
