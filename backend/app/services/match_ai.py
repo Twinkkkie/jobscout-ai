@@ -17,7 +17,10 @@ async def explain_match_ai(
     and keeps the explanation aligned with the deterministic hybrid score.
     """
     analysis = job.ai_analysis or {}
-    ai_enriched = bool(analysis.get("ai_enriched"))
+    ai_enriched = bool(
+        analysis.get("ai_enriched")
+        and analysis.get("analysis_version") == 2
+    )
 
     strengths = list(scored.get("matching_skills") or [])[:10]
     gaps = list(scored.get("skill_gaps") or [])[:10]
