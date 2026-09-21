@@ -377,7 +377,7 @@ def _unique_requirements(values: list[str]) -> list[str]:
 
 def _ai_requirement_sets(job: Job, skills: list[str]) -> tuple[list[str], list[str], list[str], list[str]]:
     analysis = job.ai_analysis or {}
-    if not analysis.get("ai_enriched") or analysis.get("analysis_version") != 2:
+    if not analysis.get("ai_enriched") or analysis.get("analysis_version") != 3:
         return [], [], [], []
 
     must = [str(item).strip() for item in analysis.get("must_have_skills", []) if str(item).strip()]
@@ -507,7 +507,7 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
     ).lower()
 
     skills = [skill for skill in (profile.skills or []) if skill]
-    active_ai_analysis = job.ai_analysis if ((job.ai_analysis or {}).get("ai_enriched") and (job.ai_analysis or {}).get("analysis_version") == 2) else {}
+    active_ai_analysis = job.ai_analysis if ((job.ai_analysis or {}).get("ai_enriched") and (job.ai_analysis or {}).get("analysis_version") == 3) else {}
     candidate_keys = _candidate_skill_keys(skills)
     required_keys = _job_skill_keys(job_text)
     matched_keys = candidate_keys & required_keys
