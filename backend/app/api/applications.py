@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.deps import get_current_user
-from app.models import Application, CandidateProfile, Job, User
+from app.models import Application, CandidateProfile, Job, Resume, User
 from app.schemas import ApplicationRead, ApplicationUpsert, JobRead
 from app.services.application_ai import prepare_application
 
@@ -67,7 +67,16 @@ async def prepare(
         application = Application(user_id=user.id, job_id=job_id, status="saved")
         db.add(application)
 
-    summary, letter = await prepare_application(profile, job)
+    latest_resume = await db.scalar(
+        select(Resume)
+        .where(Resume.user_id == user.id)
+        .order_by(Resume.created_at.desc())
+    )
+    summary, letter = await prepare_application(
+        profile,
+        job,
+        latest_resume.extracted_text if latest_resume else "",
+    )
     application.tailored_summary = summary
     application.cover_letter = letter
     await db.commit()
