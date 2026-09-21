@@ -7,40 +7,91 @@ STOPWORDS = {
     "this", "that", "have", "has", "job", "role", "work", "team", "remote",
 }
 
+# Canonical skill names + aliases seen in real vacancy text.
 SKILL_ALIASES: dict[str, list[str]] = {
-    "python": ["python"],
-    "fastapi": ["fastapi"],
-    "django": ["django"],
-    "flask": ["flask"],
-    "postgresql": ["postgresql", "postgres"],
-    "sql": ["sql"],
-    "sqlalchemy": ["sqlalchemy"],
-    "alembic": ["alembic"],
-    "docker": ["docker"],
-    "kubernetes": ["kubernetes", "k8s"],
-    "redis": ["redis"],
-    "celery": ["celery"],
-    "rabbitmq": ["rabbitmq"],
-    "aws": ["aws", "amazon web services"],
-    "azure": ["azure"],
-    "gcp": ["gcp", "google cloud"],
-    "react": ["react"],
-    "typescript": ["typescript"],
-    "javascript": ["javascript"],
-    "rag": ["rag", "retrieval-augmented generation", "retrieval augmented generation"],
-    "llm": ["llm", "large language model", "large language models", "generative ai", "genai"],
-    "langgraph": ["langgraph"],
-    "openai": ["openai"],
-    "embeddings": ["embedding", "embeddings"],
-    "vector search": ["vector search", "semantic search"],
-    "pgvector": ["pgvector"],
-    "ai agents": ["ai agent", "ai agents", "agentic"],
-    "pydantic": ["pydantic"],
+    "Python": ["python"],
+    "FastAPI": ["fastapi"],
+    "Django": ["django"],
+    "Flask": ["flask"],
+    "PostgreSQL": ["postgresql", "postgres"],
+    "MySQL": ["mysql"],
+    "SQLite": ["sqlite"],
+    "SQL": ["sql"],
+    "SQLAlchemy": ["sqlalchemy"],
+    "Alembic": ["alembic"],
+    "REST APIs": ["rest api", "rest APIs", "restful api", "restful services"],
+    "GraphQL": ["graphql"],
+    "Pydantic": ["pydantic"],
+    "asyncio": ["asyncio", "async python", "asynchronous python"],
+    "Docker": ["docker"],
+    "Docker Compose": ["docker compose", "docker-compose"],
+    "Kubernetes": ["kubernetes", "k8s"],
+    "Redis": ["redis"],
+    "RabbitMQ": ["rabbitmq", "rabbit mq"],
+    "Celery": ["celery"],
+    "Kafka": ["kafka", "apache kafka"],
+    "Git": ["git"],
+    "GitHub": ["github"],
+    "GitHub Actions": ["github actions"],
+    "CI/CD": ["ci/cd", "continuous integration", "continuous delivery", "continuous deployment"],
     "pytest": ["pytest"],
-    "git": ["git"],
-    "github actions": ["github actions"],
-    "prometheus": ["prometheus"],
-    "linux": ["linux"],
+    "Prometheus": ["prometheus"],
+    "Grafana": ["grafana"],
+    "Linux": ["linux"],
+    "AWS": ["aws", "amazon web services"],
+    "Azure": ["azure"],
+    "GCP": ["gcp", "google cloud platform", "google cloud"],
+    "Terraform": ["terraform"],
+    "React": ["react", "react.js", "reactjs"],
+    "TypeScript": ["typescript"],
+    "JavaScript": ["javascript"],
+    "HTML": ["html"],
+    "CSS": ["css"],
+    "PHP": ["php"],
+    "Node.js": ["node.js", "nodejs"],
+    "Next.js": ["next.js", "nextjs"],
+    "LangGraph": ["langgraph"],
+    "LangChain": ["langchain"],
+    "RAG": ["rag", "retrieval-augmented generation", "retrieval augmented generation"],
+    "LLM": ["llm", "llms", "large language model", "large language models"],
+    "Generative AI": ["generative ai", "genai"],
+    "OpenAI API": ["openai api", "openai"],
+    "Anthropic / Claude API": ["anthropic", "claude api"],
+    "AI Agents": ["ai agent", "ai agents", "agentic ai", "agentic workflow", "agentic workflows"],
+    "AI Automation": ["ai automation", "ai-powered automation", "intelligent automation"],
+    "Embeddings": ["embedding", "embeddings", "text embeddings"],
+    "Vector Search": ["vector search", "semantic search", "similarity search"],
+    "pgvector": ["pgvector"],
+    "Pinecone": ["pinecone"],
+    "Qdrant": ["qdrant"],
+    "Weaviate": ["weaviate"],
+    "FAISS": ["faiss"],
+    "Vector Databases": ["vector database", "vector databases", "vector db"],
+    "Prompt Engineering": ["prompt engineering", "prompt design"],
+    "Human-in-the-Loop AI": ["human-in-the-loop", "human in the loop", "hitl"],
+    "MCP": ["model context protocol", "mcp"],
+    "Transformers": ["transformers", "transformer models"],
+    "Hugging Face": ["hugging face", "huggingface"],
+    "PyTorch": ["pytorch"],
+    "TensorFlow": ["tensorflow"],
+    "scikit-learn": ["scikit-learn", "sklearn"],
+    "Machine Learning": ["machine learning"],
+    "NLP": ["natural language processing", "nlp"],
+    "Microservices": ["microservices", "microservice architecture"],
+    "Webhooks": ["webhook", "webhooks"],
+    "API Integration": ["api integration", "third-party api", "third party api"],
+    "OAuth": ["oauth", "oauth2", "oauth 2.0"],
+    "JWT": ["jwt", "json web token"],
+    "RBAC": ["rbac", "role-based access control", "role based access control"],
+    "Fernet": ["fernet"],
+    "PyQt": ["pyqt", "pyqt5", "pyqt6"],
+    "C++": ["c++"],
+    "Siemens TIA Portal": ["tia portal", "siemens tia portal"],
+    "LAD": ["lad"],
+    "FBD": ["fbd"],
+    "STL": ["stl"],
+    "SCL": ["scl"],
+    "Serial Communication": ["serial communication", "serial port", "rs-232", "rs232"],
 }
 
 ROLE_FAMILIES: dict[str, list[str]] = {
@@ -64,25 +115,32 @@ def _tokens(value: str) -> set[str]:
     }
 
 
-def _contains_phrase(text: str, phrase: str) -> bool:
-    return phrase.lower() in text.lower()
+def _has_alias(text: str, alias: str) -> bool:
+    escaped = re.escape(alias.lower())
+    # Avoid accidental substring hits such as "sql" inside an unrelated token.
+    pattern = rf"(?<![a-z0-9]){escaped}(?![a-z0-9])"
+    return re.search(pattern, text.lower()) is not None
 
 
 def _candidate_skill_keys(skills: list[str]) -> set[str]:
-    text = " ".join(skills).lower()
+    text = " | ".join(skills)
     found: set[str] = set()
-    for key, aliases in SKILL_ALIASES.items():
-        if any(alias in text for alias in aliases):
-            found.add(key)
+    for canonical, aliases in SKILL_ALIASES.items():
+        if _has_alias(text, canonical) or any(_has_alias(text, alias) for alias in aliases):
+            found.add(canonical)
     return found
 
 
 def _job_skill_keys(job_text: str) -> set[str]:
     found: set[str] = set()
-    for key, aliases in SKILL_ALIASES.items():
-        if any(alias in job_text for alias in aliases):
-            found.add(key)
+    for canonical, aliases in SKILL_ALIASES.items():
+        if any(_has_alias(job_text, alias) for alias in aliases):
+            found.add(canonical)
     return found
+
+
+def _ordered_skills(keys: set[str]) -> list[str]:
+    return [canonical for canonical in SKILL_ALIASES if canonical in keys]
 
 
 def _role_score(target_roles: list[str], title: str) -> tuple[float, str | None]:
@@ -118,7 +176,6 @@ def _role_score(target_roles: list[str], title: str) -> tuple[float, str | None]
     if overlap:
         return 20.0, "The vacancy title overlaps with your target-role keywords."
 
-    # AI-focused Python candidates can still be relevant for generic software/backend roles.
     if "ai" in candidate_families and ({"backend", "python", "software"} & job_families):
         return 15.0, "The role is adjacent to your AI/Python backend focus."
 
@@ -147,19 +204,9 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
     required_keys = _job_skill_keys(job_text)
     matched_keys = candidate_keys & required_keys
 
-    # Preserve the user's original skill names in the UI when possible.
-    matching = []
-    for skill in skills:
-        skill_lower = skill.lower()
-        for key in matched_keys:
-            aliases = SKILL_ALIASES[key]
-            if any(alias in skill_lower for alias in aliases):
-                matching.append(skill)
-                break
-    # De-duplicate while retaining order.
-    matching = list(dict.fromkeys(matching))
-
-    gaps = sorted(required_keys - candidate_keys)
+    # Show canonical skills detected in both profile and vacancy.
+    matching = _ordered_skills(matched_keys)
+    gaps = _ordered_skills(required_keys - candidate_keys)
 
     excluded = [word for word in (profile.exclude_keywords or []) if word.lower() in job_text]
 
@@ -171,23 +218,16 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
     if role_reason:
         reasons.append(role_reason)
 
-    # Avoid surfacing completely unrelated remote roles just because their
-    # descriptions mention one generic AI/tech term.
     role_relevant = role_points >= 15.0
 
-    # Score skill coverage against what the vacancy asks for, not against every
-    # skill the candidate happens to know. A broad profile should not be penalized.
     if required_keys:
         coverage = len(matched_keys) / len(required_keys)
         skill_points = 40.0 * coverage
         score += skill_points
-        if matched_keys:
-            reasons.append(
-                f"You match {len(matched_keys)} of {len(required_keys)} detected technical requirements."
-            )
+        reasons.append(
+            f"You match {len(matched_keys)} of {len(required_keys)} detected technical requirements."
+        )
     else:
-        # If a listing has no detectable tech stack, keep skills neutral rather
-        # than punishing the candidate.
         score += 20.0
         reasons.append("The listing does not expose enough structured technical requirements.")
 
@@ -217,8 +257,6 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
             f"The listing appears to ask for {required_years}+ years, above your stated {profile.years_experience} years."
         )
 
-    # Salary should only reduce the score when the listing explicitly states a
-    # maximum below the user's floor. Missing salary is not a negative signal.
     if profile.min_salary_usd and job.salary_max:
         if job.salary_max >= profile.min_salary_usd:
             score += 5.0
@@ -233,10 +271,6 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
         score -= min(50.0, 20.0 * len(excluded))
         reasons.append("Excluded keywords detected: " + ", ".join(excluded))
 
-    # Hard relevance guard: a title outside the candidate's target/adjacent
-    # role families must have at least two concrete technical skill matches.
-    # This filters roles such as voice actors, psychiatrists, sales, support,
-    # and similar listings that happen to mention AI in the description.
     if not role_relevant and len(matched_keys) < 2:
         score = min(score, 35.0)
         reasons.append("The vacancy title is outside your target role families.")
@@ -246,8 +280,8 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
 
     return {
         "score": score,
-        "matching_skills": matching[:15],
-        "skill_gaps": gaps[:8],
-        "reasons": reasons[:6],
+        "matching_skills": matching[:30],
+        "skill_gaps": gaps[:20],
+        "reasons": reasons[:8],
         "verdict": verdict,
     }
