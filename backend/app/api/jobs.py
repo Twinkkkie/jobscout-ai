@@ -33,7 +33,7 @@ async def list_jobs(
             JobMatch.score >= 45,
             Job.is_active.is_(True),
         )
-        .order_by(Job.collected_at.desc(), JobMatch.score.desc(), Job.published_at.desc().nullslast())
+        .order_by(JobMatch.score.desc(), Job.published_at.desc().nullslast(), Job.collected_at.desc())
     )
     if q:
         needle = f"%{q}%"
@@ -46,7 +46,7 @@ async def list_jobs(
 
 @router.post("/scan", status_code=202)
 async def scan_jobs(user: User = Depends(get_current_user)) -> dict:
-    task = scan_jobs_task.delay(settings.job_scan_limit, str(user.id))
+    task = scan_jobs_task.delay(max(settings.job_scan_limit, 250), str(user.id))
     return {"status": "queued", "task_id": task.id}
 
 
