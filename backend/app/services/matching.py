@@ -143,15 +143,14 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
     required_keys = _job_skill_keys(job_text)
 
     # Preserve the user's original skill names in the UI when possible.
-    matching = [
-        skill
-        for skill in skills
-        if any(
-            alias in skill.lower() or alias in job_text
-            for key, aliases in SKILL_ALIASES.items()
-            if key in candidate_keys and key in required_keys
-        )
-    ]
+    matching = []
+    for skill in skills:
+        skill_lower = skill.lower()
+        for key in matched_keys:
+            aliases = SKILL_ALIASES[key]
+            if any(alias in skill_lower for alias in aliases):
+                matching.append(skill)
+                break
     # De-duplicate while retaining order.
     matching = list(dict.fromkeys(matching))
 
