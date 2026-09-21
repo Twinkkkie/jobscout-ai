@@ -1,5 +1,7 @@
 from collections.abc import AsyncGenerator
 
+from sqlalchemy import text
+
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -24,3 +26,23 @@ async def create_schema() -> None:
 
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
+        # MVP-safe additive migrations for existing local PostgreSQL databases.
+        # A full Alembic migration setup can replace this before public launch.
+        await connection.execute(
+            text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ")
+        )
+        await connection.execute(
+            text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS last_checked_at TIMESTAMPTZ")
+        )
+        await connection.execute(
+            text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE")
+        )
+        await connection.execute(
+            text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ")
+        )
+        await connection.execute(
+            text("UPDATE jobs SET last_seen_at = COALESCE(last_seen_at, collected_at)")
+        )
+        await connection.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_jobs_is_active ON jobs (is_active)")
+        )
