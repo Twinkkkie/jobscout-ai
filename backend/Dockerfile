@@ -5,9 +5,12 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-COPY pyproject.toml .
+# Keep dependency installation in its own cached layer. Application source
+# changes should not force Docker to contact PyPI on every rebuild.
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
 COPY app ./app
-RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir .
 
 RUN mkdir -p /app/uploads
 
