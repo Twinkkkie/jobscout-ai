@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from html import unescape
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,11 +9,21 @@ from app.services.collectors import collect_public_jobs
 from app.services.matching import score_job
 
 
+def _decode_job_item(item):
+    for field in ("title", "company", "location", "remote_region", "description"):
+        value = getattr(item, field, "")
+        if isinstance(value, str):
+            setattr(item, field, unescape(value))
+    item.tags = [unescape(str(tag)) for tag in (item.tags or [])]
+    return item
+
+
 async def sync_jobs(db: AsyncSession, limit: int = 100) -> int:
     collected = await collect_public_jobs(limit)
     saved = 0
     now = datetime.now(UTC)
     for item in collected:
+        item = _decode_job_item(item)
         existing = await db.scalar(
             select(Job).where(Job.source == item.source, Job.external_id == item.external_id)
         )
