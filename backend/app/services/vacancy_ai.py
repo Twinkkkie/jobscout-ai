@@ -135,9 +135,9 @@ Location: {job.location}
 Remote region: {job.remote_region}
 Tags: {job.tags}
 Description:
-{job.description[:7000]}
+{job.description[:5000]}
 """
-    return _normalize_analysis(job, await ask_openai_json(prompt))
+    return _normalize_analysis(job, await ask_openai_json(prompt, max_output_tokens=1000))
 
 
 async def analyze_vacancies_batch_ai(jobs: list[Job]) -> dict[str, dict[str, Any]]:
@@ -159,7 +159,7 @@ async def analyze_vacancies_batch_ai(jobs: list[Job]) -> dict[str, dict[str, Any
                     f"Location: {job.location}",
                     f"Remote region: {job.remote_region}",
                     f"Tags: {job.tags}",
-                    f"Description: {(job.description or '')[:2800]}",
+                    f"Description: {(job.description or '')[:1800]}",
                 ]
             )
         )
@@ -199,7 +199,7 @@ nice-to-have. Do not omit uncommon or secondary named technologies.
 {chr(10).join(chr(10) + item for item in payload_parts)}
 </VACANCIES>
 """
-    parsed = await ask_openai_json(prompt)
+    parsed = await ask_openai_json(prompt, max_output_tokens=2600)
     rows = parsed.get("jobs") if isinstance(parsed, dict) else None
     by_id: dict[str, dict[str, Any]] = {}
 
