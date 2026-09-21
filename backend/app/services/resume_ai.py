@@ -55,10 +55,10 @@ Important:
 - If a fact is uncertain, omit it rather than guessing.
 
 <resume>
-{text[:16000]}
+{text[:10000]}
 </resume>
 """
-    parsed = await ask_openai_json(prompt)
+    parsed = await ask_openai_json(prompt, max_output_tokens=1400)
     if not parsed:
         return _fallback(base)
 
