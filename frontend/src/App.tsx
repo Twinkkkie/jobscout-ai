@@ -493,7 +493,7 @@ function App() {
                       try {
                         const state = await api(`/jobs/scan/${taskId}`);
                         if (state.status === "success") {
-                          const refined = await api(`/jobs/${jobId}/match-analysis`, { method: "POST" });
+                          const refined = await api(`/jobs/${jobId}/match-analysis?queue_ai=false`, { method: "POST" });
                           applyMatch(refined.match as Match);
                           break;
                         }
