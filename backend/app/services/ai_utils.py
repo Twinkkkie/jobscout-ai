@@ -34,10 +34,15 @@ async def ask_openai_json(prompt: str) -> dict[str, Any] | None:
         return None
 
     client = AsyncOpenAI(api_key=settings.openai_api_key)
-    response = await client.responses.create(
-        model=settings.openai_model,
-        input=prompt,
-    )
+    try:
+        response = await client.responses.create(
+            model=settings.openai_model,
+            input=prompt,
+        )
+    except Exception:
+        # External AI failures must not take down resume upload, scans, matching,
+        # or application preparation. Callers always have deterministic fallbacks.
+        return None
     return _extract_json_object(response.output_text)
 
 
