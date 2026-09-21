@@ -281,6 +281,7 @@ def test_ai_seniority_is_a_hard_constraint_even_when_title_is_ambiguous() -> Non
         url="https://example.com/job9",
         ai_analysis={
             "ai_enriched": True,
+            "analysis_version": 2,
             "role_family": "ai",
             "seniority": "senior",
             "must_have_skills": ["Python", "FastAPI", "RAG", "LangGraph"],
