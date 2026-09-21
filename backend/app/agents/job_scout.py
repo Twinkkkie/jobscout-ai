@@ -28,6 +28,7 @@ class JobScoutState(TypedDict, total=False):
     enriched: int
     matched: int
     trace: list[str]
+    defer_ai: bool
 
 
 async def _collect(state: JobScoutState) -> dict:
@@ -42,6 +43,14 @@ async def _check_availability(state: JobScoutState) -> dict:
 
 async def _enrich_vacancies(state: JobScoutState) -> dict:
     db = state["db"]
+
+    # Interactive scans should return quickly. AI enrichment can be queued as a
+    # separate Celery task after the scan has completed.
+    if state.get("defer_ai", True):
+        return {
+            "enriched": 0,
+            "trace": state.get("trace", []) + ["ai_enrichment_deferred"],
+        }
 
     # Without an API key there is nothing expensive to enrich; deterministic
     # matching remains available and the scan should finish immediately.
@@ -116,12 +125,14 @@ async def run_job_scout_agent(
     db: AsyncSession,
     user_id: Any,
     limit: int = 100,
+    defer_ai: bool = True,
 ) -> dict[str, Any]:
     state: JobScoutState = {
         "db": db,
         "user_id": user_id,
         "limit": limit,
         "trace": ["job_scout_agent:start"],
+        "defer_ai": defer_ai,
     }
 
     if StateGraph is None:
