@@ -489,6 +489,7 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
     ).lower()
 
     skills = [skill for skill in (profile.skills or []) if skill]
+    active_ai_analysis = job.ai_analysis if ((job.ai_analysis or {}).get("ai_enriched") and (job.ai_analysis or {}).get("analysis_version") == 2) else {}
     candidate_keys = _candidate_skill_keys(skills)
     required_keys = _job_skill_keys(job_text)
     matched_keys = candidate_keys & required_keys
