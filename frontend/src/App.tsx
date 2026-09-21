@@ -807,6 +807,7 @@ function JobsPage({
   onScan,
   scanning,
   scanNotice,
+  onAnalyzeMatch,
 }: {
   jobs: Job[];
   matches: Match[];
@@ -816,11 +817,13 @@ function JobsPage({
   onScan: () => void;
   scanning: boolean;
   scanNotice: string;
+  onAnalyzeMatch: (jobId: string) => Promise<Match>;
 }) {
   const t = messages[locale];
   const [savingId,setSavingId]=useState<string|null>(null);
   const [feedback,setFeedback]=useState<string>("");
   const [selectedMatch,setSelectedMatch]=useState<Match|null>(null);
+  const [analyzingId,setAnalyzingId]=useState<string|null>(null);
   const matchByJob = useMemo(
     () => new Map(matches.map(match => [match.job.id, match])),
     [matches]
@@ -841,6 +844,19 @@ function JobsPage({
       setFeedback(err instanceof Error?err.message:(locale==="en"?"Could not save the vacancy":"Не удалось сохранить вакансию"));
     }finally{
       setSavingId(null);
+    }
+  };
+
+  const analyzeMatch=async(jobId:string)=>{
+    setAnalyzingId(jobId);
+    setFeedback("");
+    try{
+      const analyzed=await onAnalyzeMatch(jobId);
+      setSelectedMatch(analyzed);
+    }catch(err){
+      setFeedback(err instanceof Error?err.message:(locale==="en"?"Could not analyze match":"Не удалось проанализировать мэтч"));
+    }finally{
+      setAnalyzingId(null);
     }
   };
 
@@ -917,11 +933,16 @@ function JobsPage({
                   {match&&(
                     <button
                       className="soft-button match-check-button"
-                      onClick={()=>setSelectedMatch(match)}
-                      title={locale==="en"?"Open match analysis":"Открыть анализ мэтча"}
+                      onClick={()=>analyzeMatch(job.id)}
+                      disabled={analyzingId===job.id}
+                      title={locale==="en"?"Run AI match analysis":"Запустить AI-анализ мэтча"}
                     >
                       <Target size={15}/>
-                      <span className="match-check-label">{locale==="en"?"Match":"Мэтч"}</span>
+                      <span className="match-check-label">
+                        {analyzingId===job.id
+                          ? (locale==="en"?"Analyzing…":"AI-анализ…")
+                          : (locale==="en"?"Match":"Мэтч")}
+                      </span>
                       <span className="match-score-badge">{Math.round(match.score)}%</span>
                     </button>
                   )}
