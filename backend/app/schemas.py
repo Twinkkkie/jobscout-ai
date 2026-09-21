@@ -36,6 +36,7 @@ class ProfileUpdate(BaseModel):
     english_level: str = ""
     skills: list[str] = []
     target_roles: list[str] = []
+    seniority_levels: list[str] = []
     preferred_regions: list[str] = []
     min_salary_usd: int | None = Field(default=None, ge=0)
     remote_only: bool = True
