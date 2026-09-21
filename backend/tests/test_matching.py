@@ -243,6 +243,7 @@ def test_ai_analysis_drives_structured_gaps() -> None:
         url="https://example.com/job8",
         ai_analysis={
             "ai_enriched": True,
+            "analysis_version": 2,
             "role_family": "ai",
             "seniority": "middle",
             "must_have_skills": ["Python", "FastAPI", "LangGraph", "AWS Bedrock"],
