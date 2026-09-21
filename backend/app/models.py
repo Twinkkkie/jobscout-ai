@@ -34,6 +34,7 @@ class CandidateProfile(Base):
     english_level: Mapped[str] = mapped_column(String(32), default="")
     skills: Mapped[list] = mapped_column(JSONB, default=list)
     target_roles: Mapped[list] = mapped_column(JSONB, default=list)
+    seniority_levels: Mapped[list] = mapped_column(JSONB, default=list)
     preferred_regions: Mapped[list] = mapped_column(JSONB, default=list)
     min_salary_usd: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     remote_only: Mapped[bool] = mapped_column(Boolean(), default=True)
