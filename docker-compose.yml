@@ -1,0 +1,73 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: jobscout
+      POSTGRES_USER: jobscout
+      POSTGRES_PASSWORD: jobscout
+    ports:
+      - "5435:5432"
+    volumes:
+      - jobscout_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobscout -d jobscout"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6381:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+    env_file: .env
+    ports:
+      - "8030:8030"
+    volumes:
+      - ./backend:/app
+      - ./uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8030 --reload
+
+  worker:
+    build:
+      context: ./backend
+    env_file: .env
+    volumes:
+      - ./backend:/app
+      - ./uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.worker.celery_app worker --loglevel=INFO --concurrency=2
+
+  web:
+    build:
+      context: ./frontend
+    environment:
+      VITE_API_URL: http://localhost:8030/api/v1
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - api
+    command: npm run dev -- --host 0.0.0.0
+
+volumes:
+  jobscout_postgres:
