@@ -170,6 +170,14 @@ SKILL_ALIASES: dict[str, list[str]] = {
     "Serial Communication": ["serial communication", "serial port", "rs-232", "rs232"],
 }
 
+SENIORITY_ALIASES: dict[str, list[str]] = {
+    "intern": ["intern", "internship", "trainee"],
+    "junior": ["junior", "jr.", "jr ", "entry level", "entry-level", "graduate"],
+    "middle": ["middle", "mid-level", "mid level", "midweight", "intermediate"],
+    "senior": ["senior", "sr.", "sr ", "staff", "principal"],
+    "lead": ["lead", "tech lead", "technical lead", "team lead", "head of"],
+}
+
 ROLE_FAMILIES: dict[str, list[str]] = {
     "ai": [
         "ai developer", "ai engineer", "artificial intelligence", "llm engineer",
@@ -311,6 +319,14 @@ def _role_score(target_roles: list[str], title: str) -> tuple[float, str | None]
     return 0.0, None
 
 
+def _detected_seniority(title: str, tags: list[str]) -> str | None:
+    haystack = " ".join([title, *[str(tag) for tag in tags]]).lower()
+    for level, aliases in SENIORITY_ALIASES.items():
+        if any(_has_alias(haystack, alias) for alias in aliases):
+            return level
+    return None
+
+
 def _required_years(job_text: str) -> int | None:
     values = [
         int(value)
@@ -353,6 +369,20 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
         reasons.append(role_reason)
 
     role_relevant = role_points >= 15.0
+
+    selected_seniority = {level.lower() for level in (profile.seniority_levels or [])}
+    detected_seniority = _detected_seniority(job.title, job.tags or [])
+    if selected_seniority and detected_seniority:
+        if detected_seniority in selected_seniority:
+            score += 7.0
+            reasons.append(
+                f"The vacancy seniority ({detected_seniority}) matches your selected level."
+            )
+        else:
+            score -= 22.0
+            reasons.append(
+                f"The vacancy seniority ({detected_seniority}) is outside your selected levels."
+            )
 
     if required_keys:
         coverage = len(matched_keys) / len(required_keys)
