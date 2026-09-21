@@ -209,8 +209,10 @@ async def _enrich_resume(user_id: str, resume_id: str) -> dict:
         }
 
 
-async def _prepare_application(user_id: str, job_id: str) -> dict:
+async def _prepare_application(user_id: str, job_id: str, progress=None) -> dict:
     async with _worker_db() as db:
+        if progress:
+            progress("loading_context")
         user_uuid = UUID(user_id)
         job_uuid = UUID(job_id)
 
@@ -241,12 +243,16 @@ async def _prepare_application(user_id: str, job_id: str) -> dict:
             .order_by(Resume.created_at.desc())
         )
 
+        if progress:
+            progress("generating_pack")
         agent_result = await run_application_agent(
             db,
             profile,
             job,
             latest_resume.extracted_text if latest_resume else "",
         )
+        if progress:
+            progress("saving_pack")
         pack = agent_result["pack"]
         application.tailored_summary = pack.get("tailored_summary", "")
         application.cover_letter = pack.get("cover_letter", "")
@@ -333,9 +339,12 @@ def scan_jobs_task(limit: int = 100, user_id: str | None = None) -> dict:
     return result
 
 
-@celery_app.task
-def prepare_application_task(user_id: str, job_id: str) -> dict:
-    return asyncio.run(_prepare_application(user_id, job_id))
+@celery_app.task(bind=True)
+def prepare_application_task(self, user_id: str, job_id: str) -> dict:
+    def progress(stage: str) -> None:
+        self.update_state(state="PROGRESS", meta={"stage": stage})
+
+    return asyncio.run(_prepare_application(user_id, job_id, progress))
 
 
 @celery_app.task
