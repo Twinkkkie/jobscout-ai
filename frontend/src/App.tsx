@@ -352,7 +352,6 @@ function App() {
               matches={matches}
               onScan={scanJobs}
               scanning={scanning}
-              scanNotice={scanNotice}
               onPrepare={async (jobId) => {
                 const app = await api(`/applications/${jobId}/prepare`, { method: "POST" });
                 setSelectedApplication(app);
@@ -375,6 +374,7 @@ function App() {
               }}
               onScan={scanJobs}
               scanning={scanning}
+              scanNotice={scanNotice}
             />
           )}
 
