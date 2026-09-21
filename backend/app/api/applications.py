@@ -4,11 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.application import run_application_agent
 from app.db import get_db
 from app.deps import get_current_user
-from app.models import Application, CandidateProfile, Job, Resume, User
+from app.models import Application, CandidateProfile, Job, User
 from app.schemas import ApplicationRead, ApplicationUpsert, JobRead
+from app.worker import prepare_application_task
 
 router = APIRouter(prefix="/applications", tags=["applications"])
 
@@ -51,46 +51,74 @@ async def upsert_application(
     return _read(application, job)
 
 
-@router.post("/{job_id}/prepare", response_model=ApplicationRead)
+@router.post("/{job_id}/prepare")
 async def prepare(
     job_id: UUID,
+    force: bool = False,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
-) -> ApplicationRead:
+) -> dict:
     job = await db.get(Job, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    profile = await db.scalar(select(CandidateProfile).where(CandidateProfile.user_id == user.id))
+
+    profile = await db.scalar(
+        select(CandidateProfile).where(CandidateProfile.user_id == user.id)
+    )
     if profile is None:
         raise HTTPException(status_code=409, detail="Complete your profile first")
 
     application = await db.scalar(
-        select(Application).where(Application.user_id == user.id, Application.job_id == job_id)
+        select(Application).where(
+            Application.user_id == user.id,
+            Application.job_id == job_id,
+        )
     )
     if application is None:
         application = Application(user_id=user.id, job_id=job_id, status="saved")
         db.add(application)
+        await db.commit()
+        await db.refresh(application)
 
-    latest_resume = await db.scalar(
-        select(Resume)
-        .where(Resume.user_id == user.id)
-        .order_by(Resume.created_at.desc())
-    )
-    agent_result = await run_application_agent(
-        db,
-        profile,
-        job,
-        latest_resume.extracted_text if latest_resume else "",
-    )
-    pack = agent_result["pack"]
-    application.tailored_summary = pack.get("tailored_summary", "")
-    application.cover_letter = pack.get("cover_letter", "")
-    application.recruiter_message = pack.get("recruiter_message", "")
-    application.interview_points = pack.get("interview_points", [])
-    application.caution_notes = pack.get("caution_notes", [])
-    application.agent_trace = agent_result.get("trace", [])
-    await db.commit()
-    await db.refresh(application)
+    # Reopening an already generated pack is instant. Regeneration is explicit.
+    if (
+        not force
+        and application.tailored_summary.strip()
+        and application.cover_letter.strip()
+    ):
+        return {
+            "status": "ready",
+            "task_id": None,
+            "application": _read(application, job).model_dump(mode="json"),
+        }
+
+    task = prepare_application_task.delay(str(user.id), str(job_id))
+    return {
+        "status": "queued",
+        "task_id": task.id,
+        "application": _read(application, job).model_dump(mode="json"),
+    }
+
+
+@router.get("/{job_id}", response_model=ApplicationRead)
+async def get_application(
+    job_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> ApplicationRead:
+    row = (
+        await db.execute(
+            select(Application, Job)
+            .join(Job, Job.id == Application.job_id)
+            .where(
+                Application.user_id == user.id,
+                Application.job_id == job_id,
+            )
+        )
+    ).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Application not found")
+    application, job = row
     return _read(application, job)
 
 
