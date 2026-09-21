@@ -322,3 +322,55 @@ button{cursor:pointer}
 .ai-runtime-pill{font-size:9px;font-weight:900;letter-spacing:.03em;border-radius:999px;padding:5px 7px;white-space:nowrap}
 .ai-runtime-pill.ready{color:var(--green);background:var(--green-bg);border:1px solid #cdeede}
 .ai-runtime-pill.fallback{color:var(--amber);background:var(--amber-bg);border:1px solid #f1dfbe}
+
+
+/* Application Agent loading */
+.application-preparing-modal{
+  width:min(520px,100%);
+  text-align:center;
+  padding:34px 30px;
+  display:grid;
+  justify-items:center;
+  gap:10px;
+}
+.preparing-orb{
+  width:64px;
+  height:64px;
+  border-radius:20px;
+  display:grid;
+  place-items:center;
+  background:linear-gradient(145deg,#fbf5ff,#fff);
+  border:1px solid #eadff7;
+  box-shadow:0 12px 30px rgba(106,76,147,.10);
+  margin-bottom:4px;
+}
+.preparing-orb svg,
+.preparing-stage svg{
+  animation:jobscout-spin .9s linear infinite;
+}
+.application-preparing-modal h2{margin:2px 0 0}
+.application-preparing-modal>.muted{margin:0;max-width:440px;overflow-wrap:anywhere}
+.preparing-stage{
+  width:100%;
+  min-height:48px;
+  margin-top:8px;
+  border-radius:14px;
+  background:#faf8fd;
+  border:1px solid #ece5f4;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:9px;
+  color:#625273;
+  font-size:12px;
+  font-weight:750;
+  padding:11px 14px;
+}
+.preparing-hint{
+  margin:2px 0 0;
+  color:var(--muted);
+  font-size:10px;
+  line-height:1.55;
+  max-width:410px;
+}
+@keyframes jobscout-spin{to{transform:rotate(360deg)}}
