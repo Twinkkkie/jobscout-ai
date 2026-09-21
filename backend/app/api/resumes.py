@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -11,6 +12,7 @@ from app.deps import get_current_user
 from app.models import CandidateProfile, Resume, User
 from app.schemas import ResumeRead
 from app.worker import rebuild_matches_task
+from app.services.resume_ai import analyze_resume_ai
 from app.services.resume_parser import UnsupportedResume, extract_text, infer_profile
 
 router = APIRouter(prefix="/resumes", tags=["resumes"])
@@ -35,7 +37,8 @@ async def upload_resume(
     if not text.strip():
         raise HTTPException(status_code=422, detail="No readable text found in resume")
 
-    extracted = infer_profile(text)
+    deterministic = infer_profile(text)
+    extracted = await analyze_resume_ai(text, deterministic)
     upload_dir = Path(settings.upload_dir) / str(user.id)
     upload_dir.mkdir(parents=True, exist_ok=True)
     safe_name = f"{uuid4()}_{Path(file.filename or 'resume').name}"
@@ -62,6 +65,8 @@ async def upload_resume(
             profile.years_experience = extracted["years_experience"]
         if not profile.summary and extracted.get("summary"):
             profile.summary = extracted["summary"]
+        profile.ai_profile = extracted
+        profile.ai_profile_updated_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(resume)
