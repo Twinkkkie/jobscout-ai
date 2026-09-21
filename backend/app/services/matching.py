@@ -38,6 +38,19 @@ SKILL_ALIASES: dict[str, list[str]] = {
     "HTML": ["html"],
     "CSS": ["css"],
     "PHP": ["php"],
+    "Laravel": ["laravel"],
+    "Symfony": ["symfony"],
+    "Composer": ["composer"],
+    "PHPUnit": ["phpunit"],
+    "Vue.js": ["vue.js", "vuejs", "vue js"],
+    "Nuxt": ["nuxt", "nuxt.js", "nuxtjs"],
+    "Shopify": ["shopify"],
+    "Shopify Liquid": ["shopify liquid", "liquid template", "liquid templating"],
+    "PlentyONE": ["plentyone", "plentymarkets", "plenty markets"],
+    "Magento / Adobe Commerce": ["magento", "adobe commerce"],
+    "WooCommerce": ["woocommerce"],
+    "WordPress": ["wordpress"],
+    "Shopware": ["shopware"],
     "Java": ["java"],
     "Spring Boot": ["spring boot", "springboot"],
     "Kotlin": ["kotlin"],
@@ -188,6 +201,12 @@ ROLE_FAMILIES: dict[str, list[str]] = {
     "backend": ["backend", "back-end", "backend engineer", "backend developer"],
     "software": ["software engineer", "software developer"],
     "ml": ["machine learning", "ml engineer"],
+    "web": [
+        "web developer", "web-developer", "web entwickler", "web-entwickler",
+        "frontend", "front-end", "php developer", "php entwickler",
+        "laravel developer", "shopify developer", "e-commerce developer",
+        "ecommerce developer",
+    ],
 }
 
 GENERIC_TAGS = {
@@ -310,6 +329,15 @@ def _unknown_profile_matches(skills: list[str], job_text: str) -> list[str]:
     return list(dict.fromkeys(matched))
 
 
+def _role_families_for_text(value: str) -> set[str]:
+    value_lower = value.lower()
+    return {
+        family
+        for family, markers in ROLE_FAMILIES.items()
+        if any(marker in value_lower for marker in markers)
+    }
+
+
 def _role_score(target_roles: list[str], title: str) -> tuple[float, str | None]:
     title_lower = title.lower()
     targets = [role.lower() for role in target_roles if role]
@@ -317,16 +345,8 @@ def _role_score(target_roles: list[str], title: str) -> tuple[float, str | None]
     if any(target in title_lower for target in targets):
         return 35.0, "Target role directly matches the vacancy title."
 
-    candidate_families: set[str] = set()
-    for family, markers in ROLE_FAMILIES.items():
-        if any(any(marker in target for marker in markers) for target in targets):
-            candidate_families.add(family)
-
-    job_families = {
-        family
-        for family, markers in ROLE_FAMILIES.items()
-        if any(marker in title_lower for marker in markers)
-    }
+    candidate_families = _role_families_for_text(" ".join(targets))
+    job_families = _role_families_for_text(title_lower)
 
     if "ai" in candidate_families and "ai" in job_families:
         return 33.0, "The vacancy is in the same AI role family as your target roles."
@@ -402,6 +422,18 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
         reasons.append(role_reason)
 
     role_relevant = role_points >= 15.0
+    candidate_role_families = _role_families_for_text(" ".join(profile.target_roles or []))
+    job_role_families = _role_families_for_text(job.title)
+    compatible_adjacent = (
+        "ai" in candidate_role_families
+        and bool(job_role_families & {"python", "backend", "software", "ml"})
+    )
+    role_family_mismatch = bool(
+        candidate_role_families
+        and job_role_families
+        and not (candidate_role_families & job_role_families)
+        and not compatible_adjacent
+    )
 
     selected_seniority = {level.lower() for level in (profile.seniority_levels or [])}
     detected_seniority = _detected_seniority(job.title, job.tags or [])
@@ -471,7 +503,10 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
         score -= min(50.0, 20.0 * len(excluded))
         reasons.append("Excluded keywords detected: " + ", ".join(excluded))
 
-    if not role_relevant and len(matching) < 2:
+    if role_family_mismatch:
+        score = min(score, 39.0)
+        reasons.append("The vacancy role family is outside your selected target roles.")
+    elif not role_relevant and len(matching) < 2:
         score = min(score, 35.0)
         reasons.append("The vacancy title is outside your target role families.")
 
