@@ -92,7 +92,7 @@ async def _enrich_user_jobs(user_id: str) -> dict:
         candidates = [
             job
             for job in recent_jobs
-            if not ((job.ai_analysis or {}).get("ai_enriched") and (job.ai_analysis or {}).get("analysis_version") == 2)
+            if not ((job.ai_analysis or {}).get("ai_enriched") and (job.ai_analysis or {}).get("analysis_version") == 3)
             and score_job(profile, job)["score"] >= 40
         ]
         candidates.sort(
@@ -142,7 +142,7 @@ async def _scan_all(limit: int) -> dict:
             candidates = [
                 job
                 for job in recent_jobs
-                if not ((job.ai_analysis or {}).get("ai_enriched") and (job.ai_analysis or {}).get("analysis_version") == 2)
+                if not ((job.ai_analysis or {}).get("ai_enriched") and (job.ai_analysis or {}).get("analysis_version") == 3)
             ][:20]
 
             # Two compact batch calls are much faster than one request per job.
