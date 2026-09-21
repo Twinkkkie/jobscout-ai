@@ -67,6 +67,8 @@ async def rebuild_matches(db: AsyncSession, profile: CandidateProfile, limit: in
         match.skill_gaps = scored["skill_gaps"]
         match.reasons = scored["reasons"]
         match.verdict = scored["verdict"]
+        # Explanations are generated on demand from the current score/requirements.
+        match.ai_explanation = {}
 
     await db.commit()
     return len(jobs)
