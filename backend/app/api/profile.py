@@ -6,7 +6,7 @@ from app.db import get_db
 from app.deps import get_current_user
 from app.models import CandidateProfile, User
 from app.schemas import ProfileRead, ProfileUpdate
-from app.services.orchestrator import rebuild_matches
+from app.worker import rebuild_matches_task
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -40,5 +40,12 @@ async def update_profile(
         setattr(profile, key, value)
     await db.commit()
     await db.refresh(profile)
-    await rebuild_matches(db, profile)
+
+    # Saving the profile should be immediate. Rebuilding all vacancy matches can
+    # take noticeably longer, so run it in Celery instead of blocking the request.
+    try:
+        rebuild_matches_task.delay(str(user.id))
+    except Exception:
+        pass
+
     return profile
