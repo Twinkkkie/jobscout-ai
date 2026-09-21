@@ -357,6 +357,24 @@ def _match_requirement_to_profile(requirement: str, skills: list[str]) -> str | 
     return None
 
 
+def _requirement_key(value: str) -> str:
+    canonical = _canonical_for_profile_skill(value)
+    if canonical:
+        return canonical.lower()
+    return re.sub(r"[^a-z0-9+#.]+", " ", value.lower()).strip()
+
+
+def _unique_requirements(values: list[str]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        key = _requirement_key(value)
+        if value and key and key not in seen:
+            seen.add(key)
+            result.append(value)
+    return result
+
+
 def _ai_requirement_sets(job: Job, skills: list[str]) -> tuple[list[str], list[str], list[str], list[str]]:
     analysis = job.ai_analysis or {}
     if not analysis.get("ai_enriched") or analysis.get("analysis_version") != 2:
@@ -496,21 +514,29 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
 
     ai_matching, ai_gaps, ai_matched_must, ai_missing_must = _ai_requirement_sets(job, skills)
 
-    if ai_matching or ai_gaps:
-        # AI extraction becomes the primary requirement source because it can
-        # understand arbitrary frameworks and contextual requirements that a
-        # static catalogue will always miss.
-        matching = ai_matching
-        gaps = ai_gaps
-        requirement_source = "ai"
-    else:
-        matching = [
-            _display_label_for_requirement(key, skills)
-            for key in _ordered_skills(matched_keys)
+    deterministic_matching = [
+        _display_label_for_requirement(key, skills)
+        for key in _ordered_skills(matched_keys)
+    ]
+    deterministic_matching.extend(_unknown_profile_matches(skills, job_text))
+    deterministic_matching = _unique_requirements(deterministic_matching)
+    deterministic_gaps = _unique_requirements(_ordered_skills(required_keys - candidate_keys))
+
+    if active_ai_analysis and (ai_matching or ai_gaps):
+        # Merge both sources instead of letting the LLM replace explicit text
+        # detection. AI catches uncommon technologies; deterministic matching
+        # catches explicit stack items the model may omit.
+        matching = _unique_requirements(ai_matching + deterministic_matching)
+        matched_requirement_keys = {_requirement_key(value) for value in matching}
+        gaps = [
+            value
+            for value in _unique_requirements(ai_gaps + deterministic_gaps)
+            if _requirement_key(value) not in matched_requirement_keys
         ]
-        matching.extend(_unknown_profile_matches(skills, job_text))
-        matching = list(dict.fromkeys(matching))
-        gaps = _ordered_skills(required_keys - candidate_keys)
+        requirement_source = "hybrid_ai"
+    else:
+        matching = deterministic_matching
+        gaps = deterministic_gaps
         requirement_source = "deterministic"
 
     detected_requirement_count = len(matching) + len(gaps)
@@ -563,20 +589,47 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
             )
 
     if detected_requirement_count:
-        if requirement_source == "ai":
+        if requirement_source == "hybrid_ai":
             analysis = active_ai_analysis
-            must_total = len(analysis.get("must_have_skills", []) or [])
-            nice_total = len(analysis.get("nice_to_have_skills", []) or [])
-            matched_must_count = len(ai_matched_must)
-            matched_nice_count = max(0, len(matching) - matched_must_count)
-            must_points = 32.0 * (matched_must_count / must_total) if must_total else 0.0
-            nice_points = 8.0 * (matched_nice_count / nice_total) if nice_total else 0.0
-            if not must_total and nice_total:
-                nice_points = 40.0 * (matched_nice_count / nice_total)
-            score += must_points + nice_points
+            must = [str(item).strip() for item in (analysis.get("must_have_skills", []) or []) if str(item).strip()]
+            nice = [str(item).strip() for item in (analysis.get("nice_to_have_skills", []) or []) if str(item).strip()]
+
+            matched_must_count = sum(1 for requirement in must if _match_requirement_to_profile(requirement, skills))
+            matched_nice_count = sum(1 for requirement in nice if _match_requirement_to_profile(requirement, skills))
+
+            ai_requirement_keys = {
+                _requirement_key(requirement)
+                for requirement in must + nice
+                if _requirement_key(requirement)
+            }
+            deterministic_requirements = _unique_requirements(
+                deterministic_matching + deterministic_gaps
+            )
+            deterministic_extras = [
+                requirement
+                for requirement in deterministic_requirements
+                if _requirement_key(requirement) not in ai_requirement_keys
+            ]
+            matched_keys_display = {_requirement_key(value) for value in matching}
+            matched_extra_count = sum(
+                1
+                for requirement in deterministic_extras
+                if _requirement_key(requirement) in matched_keys_display
+            )
+
+            # Must-have requirements matter most, while explicit technologies
+            # found directly in the vacancy text still count even if AI omitted them.
+            total_weight = (4 * len(must)) + len(nice) + (2 * len(deterministic_extras))
+            matched_weight = (
+                (4 * matched_must_count)
+                + matched_nice_count
+                + (2 * matched_extra_count)
+            )
+            skill_points = 40.0 * (matched_weight / total_weight) if total_weight else 20.0
+            score += skill_points
             reasons.append(
-                f"AI extracted {must_total} must-have and {nice_total} nice-to-have technical requirements; "
-                f"you match {len(matching)} of {detected_requirement_count}."
+                f"Hybrid analysis found {detected_requirement_count} technical requirements; "
+                f"you match {len(matching)}."
             )
             if ai_missing_must:
                 reasons.append(
