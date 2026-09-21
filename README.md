@@ -48,3 +48,8 @@ API docs: http://localhost:8030/docs
 **Frontend:** React, TypeScript, Vite, PWA, responsive CSS, i18n  
 **AI:** profile extraction/matching architecture with deterministic fallback and optional LLM provider  
 **Infra:** Docker Compose, pytest, GitHub Actions
+
+
+## Vacancy freshness
+
+Each scan adds newly discovered vacancies, refreshes existing ones, and re-checks recent/saved vacancy links. Confirmed closed listings (HTTP 404/410 or strong closed-position markers) are hidden from Jobs and Matches. Saved vacancies remain in the tracker with a visible closed status so application history is not silently lost. Network errors, rate limits and anti-bot responses are treated as uncertain rather than closed to avoid false positives.
