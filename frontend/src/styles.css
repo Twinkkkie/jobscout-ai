@@ -317,3 +317,8 @@ button{cursor:pointer}
 .application-list{background:#fafafd;border:1px solid var(--line);color:#596377}
 .caution-list{background:#fff7f4;border:1px solid #f4ddd3;color:#8c5441}
 @media(max-width:780px){.agent-heading{padding-right:36px}.career-button{width:100%}}
+
+.career-title-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.ai-runtime-pill{font-size:9px;font-weight:900;letter-spacing:.03em;border-radius:999px;padding:5px 7px;white-space:nowrap}
+.ai-runtime-pill.ready{color:var(--green);background:var(--green-bg);border:1px solid #cdeede}
+.ai-runtime-pill.fallback{color:var(--amber);background:var(--amber-bg);border:1px solid #f1dfbe}
