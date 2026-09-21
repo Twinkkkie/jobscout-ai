@@ -524,7 +524,7 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
     candidate_role_families = _role_families_for_text(" ".join(profile.target_roles or []))
     job_role_families = _role_families_for_text(job.title)
 
-    ai_role_family = str((job.ai_analysis or {}).get("role_family") or "").lower()
+    ai_role_family = str(active_ai_analysis.get("role_family") or "").lower()
     if ai_role_family and ai_role_family != "other":
         job_role_families.add(ai_role_family)
         if ai_role_family in candidate_role_families:
@@ -548,7 +548,7 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
     )
 
     selected_seniority = {level.lower() for level in (profile.seniority_levels or [])}
-    detected_seniority = str((job.ai_analysis or {}).get("seniority") or "").lower() or _detected_seniority(job.title, job.tags or [])
+    detected_seniority = str(active_ai_analysis.get("seniority") or "").lower() or _detected_seniority(job.title, job.tags or [])
     seniority_mismatch = False
     if selected_seniority and detected_seniority:
         if detected_seniority in selected_seniority:
@@ -564,7 +564,7 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
 
     if detected_requirement_count:
         if requirement_source == "ai":
-            analysis = job.ai_analysis or {}
+            analysis = active_ai_analysis
             must_total = len(analysis.get("must_have_skills", []) or [])
             nice_total = len(analysis.get("nice_to_have_skills", []) or [])
             matched_must_count = len(ai_matched_must)
