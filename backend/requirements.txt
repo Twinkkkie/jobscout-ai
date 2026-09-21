@@ -13,3 +13,4 @@ feedparser>=6.0
 redis>=5.0
 celery>=5.4
 openai>=2.0
+langgraph>=0.2,<2
