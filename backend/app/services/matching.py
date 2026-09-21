@@ -167,6 +167,10 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
     if role_reason:
         reasons.append(role_reason)
 
+    # Avoid surfacing completely unrelated remote roles just because their
+    # descriptions mention one generic AI/tech term.
+    role_relevant = role_points >= 15.0
+
     # Score skill coverage against what the vacancy asks for, not against every
     # skill the candidate happens to know. A broad profile should not be penalized.
     if required_keys:
@@ -224,6 +228,14 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
     if excluded:
         score -= min(50.0, 20.0 * len(excluded))
         reasons.append("Excluded keywords detected: " + ", ".join(excluded))
+
+    # Hard relevance guard: a title outside the candidate's target/adjacent
+    # role families must have at least two concrete technical skill matches.
+    # This filters roles such as voice actors, psychiatrists, sales, support,
+    # and similar listings that happen to mention AI in the description.
+    if not role_relevant and len(matched_keys) < 2:
+        score = min(score, 35.0)
+        reasons.append("The vacancy title is outside your target role families.")
 
     score = max(0.0, min(100.0, round(score, 1)))
     verdict = "apply" if score >= 75 else "maybe" if score >= 55 else "skip"
