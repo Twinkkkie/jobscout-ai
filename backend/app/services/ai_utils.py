@@ -30,7 +30,11 @@ def _extract_json_object(text: str) -> dict[str, Any] | None:
         return None
 
 
-async def ask_openai_json(prompt: str) -> dict[str, Any] | None:
+async def ask_openai_json(
+    prompt: str,
+    *,
+    max_output_tokens: int = 1200,
+) -> dict[str, Any] | None:
     if not settings.openai_api_key:
         return None
 
@@ -38,8 +42,10 @@ async def ask_openai_json(prompt: str) -> dict[str, Any] | None:
     try:
         response = await asyncio.wait_for(
             client.responses.create(
-                model=settings.openai_model,
+                model=settings.openai_fast_model,
                 input=prompt,
+                reasoning={"effort": "none"},
+                max_output_tokens=max_output_tokens,
             ),
             timeout=settings.openai_timeout_seconds,
         )
