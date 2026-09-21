@@ -44,13 +44,21 @@ async def rebuild_matches(db: AsyncSession, profile: CandidateProfile, limit: in
         .limit(limit)
     )
     jobs = list(result.scalars().all())
-    count = 0
+    if not jobs:
+        return 0
+
+    job_ids = [job.id for job in jobs]
+    existing_result = await db.execute(
+        select(JobMatch).where(
+            JobMatch.user_id == profile.user_id,
+            JobMatch.job_id.in_(job_ids),
+        )
+    )
+    existing_by_job = {match.job_id: match for match in existing_result.scalars().all()}
 
     for job in jobs:
         scored = score_job(profile, job)
-        match = await db.scalar(
-            select(JobMatch).where(JobMatch.user_id == profile.user_id, JobMatch.job_id == job.id)
-        )
+        match = existing_by_job.get(job.id)
         if match is None:
             match = JobMatch(user_id=profile.user_id, job_id=job.id)
             db.add(match)
@@ -59,7 +67,6 @@ async def rebuild_matches(db: AsyncSession, profile: CandidateProfile, limit: in
         match.skill_gaps = scored["skill_gaps"]
         match.reasons = scored["reasons"]
         match.verdict = scored["verdict"]
-        count += 1
 
     await db.commit()
-    return count
+    return len(jobs)
