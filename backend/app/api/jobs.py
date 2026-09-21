@@ -128,7 +128,7 @@ async def analyze_match(
         from fastapi import HTTPException
         raise HTTPException(status_code=409, detail="Complete your profile first")
 
-    if not (job.ai_analysis or {}).get("ai_enriched"):
+    if not ((job.ai_analysis or {}).get("ai_enriched") and (job.ai_analysis or {}).get("analysis_version") == 2):
         job.ai_analysis = await analyze_vacancy_ai(job)
 
     scored = score_job(profile, job)
