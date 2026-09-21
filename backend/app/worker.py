@@ -27,7 +27,7 @@ celery_app.conf.update(
 async def _scan(limit: int, user_id: str | None) -> dict:
     async with SessionLocal() as db:
         new_jobs = await sync_jobs(db, limit)
-        availability = await verify_job_availability(db)
+        availability = await verify_job_availability(db, limit=30)
         matched = 0
         if user_id:
             profile = await db.scalar(
@@ -56,7 +56,7 @@ async def _rematch_user(user_id: str) -> dict:
 async def _scan_all(limit: int) -> dict:
     async with SessionLocal() as db:
         new_jobs = await sync_jobs(db, limit)
-        availability = await verify_job_availability(db)
+        availability = await verify_job_availability(db, limit=100)
         result = await db.execute(select(CandidateProfile))
         profiles = list(result.scalars().all())
         matched = 0
