@@ -145,7 +145,16 @@ function App() {
       if (!(options.body instanceof FormData) && options.body) {
         headers.set("Content-Type", "application/json");
       }
-      const response = await fetch(`${API}${path}`, { ...options, headers });
+      let response: Response;
+      try {
+        response = await fetch(`${API}${path}`, { ...options, headers });
+      } catch {
+        throw new Error(
+          locale === "en"
+            ? "Cannot reach the JobScout API. Check that Docker/API is running."
+            : "Не удается подключиться к API JobScout. Проверь, что Docker/API запущен."
+        );
+      }
       if (response.status === 401) {
         localStorage.removeItem("jobscout_token");
         setToken("");
@@ -157,7 +166,7 @@ function App() {
       if (response.status === 204) return null;
       return response.json();
     },
-    [token]
+    [token, locale]
   );
 
   const refresh = useCallback(async () => {
