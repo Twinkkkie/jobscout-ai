@@ -29,6 +29,9 @@ async def create_schema() -> None:
         # MVP-safe additive migrations for existing local PostgreSQL databases.
         # A full Alembic migration setup can replace this before public launch.
         await connection.execute(
+            text("ALTER TABLE candidate_profiles ADD COLUMN IF NOT EXISTS seniority_levels JSONB NOT NULL DEFAULT '[]'::jsonb")
+        )
+        await connection.execute(
             text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ")
         )
         await connection.execute(
