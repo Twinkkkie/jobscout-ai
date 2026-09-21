@@ -329,6 +329,68 @@ def _unknown_profile_matches(skills: list[str], job_text: str) -> list[str]:
     return list(dict.fromkeys(matched))
 
 
+def _match_requirement_to_profile(requirement: str, skills: list[str]) -> str | None:
+    requirement = requirement.strip()
+    if not requirement:
+        return None
+
+    # Canonical/alias-aware comparison first.
+    requirement_canonical = _canonical_for_profile_skill(requirement)
+    if requirement_canonical:
+        for skill in skills:
+            if _canonical_for_profile_skill(skill) == requirement_canonical:
+                return skill
+
+    # Exact phrase overlap for technologies not in our catalogue.
+    for skill in skills:
+        if _has_alias(skill, requirement) or _has_alias(requirement, skill):
+            return skill
+
+    # Conservative token overlap for variants such as "REST API development"
+    # versus "REST APIs". Require at least one non-generic technical token.
+    req_tokens = _tokens(requirement)
+    for skill in skills:
+        skill_tokens = _tokens(skill)
+        overlap = req_tokens & skill_tokens
+        if overlap and (len(overlap) >= 2 or any(len(token) >= 5 for token in overlap)):
+            return skill
+    return None
+
+
+def _ai_requirement_sets(job: Job, skills: list[str]) -> tuple[list[str], list[str], list[str], list[str]]:
+    analysis = job.ai_analysis or {}
+    if not analysis.get("ai_enriched"):
+        return [], [], [], []
+
+    must = [str(item).strip() for item in analysis.get("must_have_skills", []) if str(item).strip()]
+    nice = [str(item).strip() for item in analysis.get("nice_to_have_skills", []) if str(item).strip()]
+    matched_must: list[str] = []
+    missing_must: list[str] = []
+    matched_nice: list[str] = []
+    missing_nice: list[str] = []
+
+    for requirement in must:
+        matched = _match_requirement_to_profile(requirement, skills)
+        if matched:
+            matched_must.append(matched)
+        else:
+            missing_must.append(requirement)
+
+    for requirement in nice:
+        matched = _match_requirement_to_profile(requirement, skills)
+        if matched:
+            matched_nice.append(matched)
+        else:
+            missing_nice.append(requirement)
+
+    return (
+        list(dict.fromkeys(matched_must + matched_nice)),
+        list(dict.fromkeys(missing_must + missing_nice)),
+        list(dict.fromkeys(matched_must)),
+        list(dict.fromkeys(missing_must)),
+    )
+
+
 def _role_families_for_text(value: str) -> set[str]:
     value_lower = value.lower()
     families = {
@@ -431,16 +493,25 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
     required_keys = _job_skill_keys(job_text)
     matched_keys = candidate_keys & required_keys
 
-    matching = [
-        _display_label_for_requirement(key, skills)
-        for key in _ordered_skills(matched_keys)
-    ]
-    matching.extend(_unknown_profile_matches(skills, job_text))
-    matching = list(dict.fromkeys(matching))
-    gaps = _ordered_skills(required_keys - candidate_keys)
+    ai_matching, ai_gaps, ai_matched_must, ai_missing_must = _ai_requirement_sets(job, skills)
 
-    # One source of truth for both the percentage and the UI. If the UI shows
-    # 9 matching skills and 2 gaps, the scoring reasons must use 9 of 11 too.
+    if ai_matching or ai_gaps:
+        # AI extraction becomes the primary requirement source because it can
+        # understand arbitrary frameworks and contextual requirements that a
+        # static catalogue will always miss.
+        matching = ai_matching
+        gaps = ai_gaps
+        requirement_source = "ai"
+    else:
+        matching = [
+            _display_label_for_requirement(key, skills)
+            for key in _ordered_skills(matched_keys)
+        ]
+        matching.extend(_unknown_profile_matches(skills, job_text))
+        matching = list(dict.fromkeys(matching))
+        gaps = _ordered_skills(required_keys - candidate_keys)
+        requirement_source = "deterministic"
+
     detected_requirement_count = len(matching) + len(gaps)
 
     excluded = [word for word in (profile.exclude_keywords or []) if word.lower() in job_text]
@@ -449,13 +520,21 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
     reasons: list[str] = []
 
     role_points, role_reason = _role_score(profile.target_roles or [], job.title)
+    candidate_role_families = _role_families_for_text(" ".join(profile.target_roles or []))
+    job_role_families = _role_families_for_text(job.title)
+
+    ai_role_family = str((job.ai_analysis or {}).get("role_family") or "").lower()
+    if ai_role_family and ai_role_family != "other":
+        job_role_families.add(ai_role_family)
+        if ai_role_family in candidate_role_families:
+            role_points = max(role_points, 33.0 if ai_role_family == "ai" else 29.0)
+            role_reason = "AI vacancy analysis confirms the role family matches your targets."
+
     score += role_points
     if role_reason:
         reasons.append(role_reason)
 
     role_relevant = role_points >= 15.0
-    candidate_role_families = _role_families_for_text(" ".join(profile.target_roles or []))
-    job_role_families = _role_families_for_text(job.title)
     compatible_adjacent = (
         "ai" in candidate_role_families
         and bool(job_role_families & {"python", "backend", "software", "ml"})
@@ -468,7 +547,7 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
     )
 
     selected_seniority = {level.lower() for level in (profile.seniority_levels or [])}
-    detected_seniority = _detected_seniority(job.title, job.tags or [])
+    detected_seniority = str((job.ai_analysis or {}).get("seniority") or "").lower() or _detected_seniority(job.title, job.tags or [])
     seniority_mismatch = False
     if selected_seniority and detected_seniority:
         if detected_seniority in selected_seniority:
@@ -483,12 +562,32 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
             )
 
     if detected_requirement_count:
-        coverage = len(matching) / detected_requirement_count
-        skill_points = 40.0 * coverage
-        score += skill_points
-        reasons.append(
-            f"You match {len(matching)} of {detected_requirement_count} detected technical requirements."
-        )
+        if requirement_source == "ai":
+            analysis = job.ai_analysis or {}
+            must_total = len(analysis.get("must_have_skills", []) or [])
+            nice_total = len(analysis.get("nice_to_have_skills", []) or [])
+            matched_must_count = len(ai_matched_must)
+            matched_nice_count = max(0, len(matching) - matched_must_count)
+            must_points = 32.0 * (matched_must_count / must_total) if must_total else 0.0
+            nice_points = 8.0 * (matched_nice_count / nice_total) if nice_total else 0.0
+            if not must_total and nice_total:
+                nice_points = 40.0 * (matched_nice_count / nice_total)
+            score += must_points + nice_points
+            reasons.append(
+                f"AI extracted {must_total} must-have and {nice_total} nice-to-have technical requirements; "
+                f"you match {len(matching)} of {detected_requirement_count}."
+            )
+            if ai_missing_must:
+                reasons.append(
+                    "Missing must-have skills: " + ", ".join(ai_missing_must[:6])
+                )
+        else:
+            coverage = len(matching) / detected_requirement_count
+            skill_points = 40.0 * coverage
+            score += skill_points
+            reasons.append(
+                f"You match {len(matching)} of {detected_requirement_count} detected technical requirements."
+            )
     else:
         score += 20.0
         reasons.append(
