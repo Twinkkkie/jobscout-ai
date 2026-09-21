@@ -7,9 +7,10 @@ from celery import Celery
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.agents.application import run_application_agent
 from app.agents.job_scout import run_job_scout_agent
 from app.core.config import settings
-from app.models import CandidateProfile, Job, JobMatch, Resume
+from app.models import Application, CandidateProfile, Job, JobMatch, Resume
 from app.services.availability import verify_job_availability
 from app.services.match_ai import explain_match_ai
 from app.services.matching import score_job
@@ -208,6 +209,61 @@ async def _enrich_resume(user_id: str, resume_id: str) -> dict:
         }
 
 
+async def _prepare_application(user_id: str, job_id: str) -> dict:
+    async with _worker_db() as db:
+        user_uuid = UUID(user_id)
+        job_uuid = UUID(job_id)
+
+        profile = await db.scalar(
+            select(CandidateProfile).where(CandidateProfile.user_id == user_uuid)
+        )
+        job = await db.get(Job, job_uuid)
+        if profile is None or job is None:
+            return {"prepared": False, "job_id": job_id}
+
+        application = await db.scalar(
+            select(Application).where(
+                Application.user_id == user_uuid,
+                Application.job_id == job_uuid,
+            )
+        )
+        if application is None:
+            application = Application(
+                user_id=user_uuid,
+                job_id=job_uuid,
+                status="saved",
+            )
+            db.add(application)
+
+        latest_resume = await db.scalar(
+            select(Resume)
+            .where(Resume.user_id == user_uuid)
+            .order_by(Resume.created_at.desc())
+        )
+
+        agent_result = await run_application_agent(
+            db,
+            profile,
+            job,
+            latest_resume.extracted_text if latest_resume else "",
+        )
+        pack = agent_result["pack"]
+        application.tailored_summary = pack.get("tailored_summary", "")
+        application.cover_letter = pack.get("cover_letter", "")
+        application.recruiter_message = pack.get("recruiter_message", "")
+        application.interview_points = pack.get("interview_points", [])
+        application.caution_notes = pack.get("caution_notes", [])
+        application.agent_trace = agent_result.get("trace", [])
+        await db.commit()
+        await db.refresh(application)
+
+        return {
+            "prepared": True,
+            "application_id": str(application.id),
+            "job_id": str(job.id),
+        }
+
+
 async def _scan_all(limit: int) -> dict:
     async with _worker_db() as db:
         new_jobs = await sync_jobs(db, limit)
@@ -275,6 +331,11 @@ def scan_jobs_task(limit: int = 100, user_id: str | None = None) -> dict:
         result["ai_enrichment_queued"] = False
         result["ai_task_id"] = None
     return result
+
+
+@celery_app.task
+def prepare_application_task(user_id: str, job_id: str) -> dict:
+    return asyncio.run(_prepare_application(user_id, job_id))
 
 
 @celery_app.task
