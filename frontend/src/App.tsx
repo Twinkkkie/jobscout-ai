@@ -326,6 +326,7 @@ function App() {
           {page === "jobs" && (
             <JobsPage
               jobs={visibleJobs}
+              applications={applications}
               locale={locale}
               onSave={async (jobId) => {
                 await api(`/applications/${jobId}`, {
@@ -342,6 +343,7 @@ function App() {
           {page === "matches" && (
             <MatchesPage
               matches={matches}
+              applications={applications}
               locale={locale}
               onPrepare={async (jobId) => {
                 const app = await api(`/applications/${jobId}/prepare`, { method: "POST" });
@@ -649,79 +651,179 @@ function MatchRow({
 
 function JobsPage({
   jobs,
+  applications,
   locale,
   onSave,
   onScan,
   scanning,
 }: {
   jobs: Job[];
+  applications: Application[];
   locale: Locale;
   onSave: (jobId: string) => Promise<void>;
   onScan: () => void;
   scanning: boolean;
 }) {
   const t = messages[locale];
+  const [savingId,setSavingId]=useState<string|null>(null);
+  const [feedback,setFeedback]=useState<string>("");
+  const statusByJob = useMemo(
+    () => new Map(applications.map(application => [application.job.id, application.status])),
+    [applications]
+  );
+
+  const saveJob=async(jobId:string)=>{
+    setSavingId(jobId);
+    setFeedback("");
+    try{
+      await onSave(jobId);
+      setFeedback(locale==="en"?"Vacancy saved to your tracker ✓":"Вакансия сохранена в трекер ✓");
+      window.setTimeout(()=>setFeedback(""),2500);
+    }catch(err){
+      setFeedback(err instanceof Error?err.message:(locale==="en"?"Could not save the vacancy":"Не удалось сохранить вакансию"));
+    }finally{
+      setSavingId(null);
+    }
+  };
+
+  const trackerLabel=(status:string|undefined)=>{
+    if(!status)return null;
+    if(status==="saved")return locale==="en"?"Saved ✓":"Сохранено ✓";
+    if(status==="applied")return locale==="en"?"Applied ✓":"Отклик отправлен ✓";
+    if(status==="interview")return locale==="en"?"Interview":"Собеседование";
+    if(status==="offer")return locale==="en"?"Offer":"Оффер";
+    if(status==="rejected")return locale==="en"?"Rejected":"Отказ";
+    return status;
+  };
+
   return (
     <>
       <div className="page-heading">
         <div><span className="eyebrow">{t.remote}</span><h1>{t.jobs}</h1><p>{locale === "en" ? "Fresh roles from attributed public sources." : "Свежие вакансии из разрешенных публичных источников."}</p></div>
         <button className="primary-button" onClick={onScan} disabled={scanning}><Sparkles size={18} />{scanning ? t.scanning : t.scan}</button>
       </div>
+      {feedback&&<div className="action-feedback"><CheckCircle2 size={17}/><span>{feedback}</span></div>}
       <div className="job-grid">
-        {jobs.map((job) => (
-          <article className="job-card" key={job.id}>
-            <div className="job-card-head"><div className="company-badge">{job.company.slice(0,1).toUpperCase()}</div><button className="bookmark-button" onClick={() => onSave(job.id)}><Bookmark size={18}/></button></div>
-            <h3>{job.title}</h3>
-            <p>{job.company}</p>
-            <div className="job-meta"><span>🌐 {job.location || job.remote_region}</span><span>{salary(job,t.salaryUnknown)}</span></div>
-            <div className="skill-row">{job.tags.slice(0,5).map(tag=><span className="tag" key={tag}>{tag}</span>)}</div>
-            <div className="job-actions"><span className="source-label">{job.source}</span><a className="soft-button" href={job.url} target="_blank" rel="noreferrer">{t.openOriginal}<ArrowUpRight size={15}/></a></div>
-          </article>
-        ))}
+        {jobs.map((job) => {
+          const status=statusByJob.get(job.id);
+          const label=trackerLabel(status);
+          const locked=Boolean(status && status!=="saved");
+          return (
+            <article className="job-card" key={job.id}>
+              <div className="job-card-head">
+                <div className="company-badge">{job.company.slice(0,1).toUpperCase()}</div>
+                <button
+                  className={`save-job-button ${status?"tracked":""}`}
+                  onClick={() => !locked && saveJob(job.id)}
+                  disabled={savingId===job.id || locked || status==="saved"}
+                  title={label || (locale==="en"?"Save vacancy":"Сохранить вакансию")}
+                >
+                  {status ? <CheckCircle2 size={16}/> : <Bookmark size={16}/>}
+                  <span>
+                    {savingId===job.id
+                      ? (locale==="en"?"Saving…":"Сохраняем…")
+                      : (label || (locale==="en"?"Save":"Сохранить"))}
+                  </span>
+                </button>
+              </div>
+              <h3>{job.title}</h3>
+              <p>{job.company}</p>
+              <div className="job-meta"><span>🌐 {job.location || job.remote_region}</span><span>{salary(job,t.salaryUnknown)}</span></div>
+              <div className="skill-row">{job.tags.slice(0,5).map(tag=><span className="tag" key={tag}>{tag}</span>)}</div>
+              <div className="job-actions"><span className="source-label">{job.source}</span><a className="soft-button" href={job.url} target="_blank" rel="noreferrer">{t.openOriginal}<ArrowUpRight size={15}/></a></div>
+            </article>
+          );
+        })}
       </div>
     </>
   );
 }
 
+
 function MatchesPage({
   matches,
+  applications,
   locale,
   onPrepare,
   onApplied,
 }: {
   matches: Match[];
+  applications: Application[];
   locale: Locale;
   onPrepare: (jobId: string) => Promise<void>;
   onApplied: (jobId: string) => Promise<void>;
 }) {
   const t = messages[locale];
+  const [applyingId,setApplyingId]=useState<string|null>(null);
+  const [feedback,setFeedback]=useState("");
+  const statusByJob = useMemo(
+    () => new Map(applications.map(application => [application.job.id, application.status])),
+    [applications]
+  );
+
+  const markApplied=async(jobId:string)=>{
+    setApplyingId(jobId);
+    setFeedback("");
+    try{
+      await onApplied(jobId);
+      setFeedback(locale==="en"?"Marked as applied and added to your tracker ✓":"Отмечено как «Отклик отправлен» и добавлено в трекер ✓");
+      window.setTimeout(()=>setFeedback(""),2800);
+    }catch(err){
+      setFeedback(err instanceof Error?err.message:(locale==="en"?"Could not update application status":"Не удалось обновить статус отклика"));
+    }finally{
+      setApplyingId(null);
+    }
+  };
+
   return (
     <>
       <div className="page-heading"><div><span className="eyebrow">AI MATCHING</span><h1>{t.matches}</h1><p>{locale === "en" ? "Ranked against your profile, preferences and skills." : "Рейтинг относительно твоего профиля, навыков и предпочтений."}</p></div></div>
+      {feedback&&<div className="action-feedback"><CheckCircle2 size={17}/><span>{feedback}</span></div>}
       <div className="match-detail-list">
-        {matches.map(match => (
-          <article className="panel match-detail" key={match.id}>
-            <div className="match-detail-top">
-              <div><span className={`verdict ${match.verdict}`}>{t[match.verdict]}</span><h2>{match.job.title}</h2><p>{match.job.company} · {match.job.location}</p></div>
-              <div className={`big-score ${match.verdict}`}><strong>{Math.round(match.score)}%</strong><span>{t.fit}</span></div>
-            </div>
-            <div className="analysis-grid">
-              <div><h4>✓ {t.matchingSkills}</h4><div className="skill-row">{match.matching_skills.map(skill=><span className="tag positive" key={skill}>{skill}</span>)}</div></div>
-              <div><h4>! {t.skillGaps}</h4><div className="skill-row">{match.skill_gaps.map(skill=><span className="tag gap" key={skill}>{skill}</span>)}</div></div>
-            </div>
-            <div className="reason-list">{match.reasons.map(reason=><span key={reason}>✦ {reason}</span>)}</div>
-            <div className="job-actions">
-              <a className="ghost-button" href={match.job.url} target="_blank" rel="noreferrer">{t.openOriginal}<ArrowUpRight size={15}/></a>
-              <button className="ghost-button" onClick={()=>onApplied(match.job.id)}>{t.markApplied}</button>
-              <button className="primary-button" onClick={()=>onPrepare(match.job.id)}>{t.prepare}<Sparkles size={16}/></button>
-            </div>
-          </article>
-        ))}
+        {matches.map(match => {
+          const status=statusByJob.get(match.job.id);
+          const alreadyApplied=Boolean(status && status!=="saved");
+          const appliedLabel = status==="interview"
+            ? (locale==="en"?"Interview":"Собеседование")
+            : status==="offer"
+              ? (locale==="en"?"Offer":"Оффер")
+              : status==="rejected"
+                ? (locale==="en"?"Rejected":"Отказ")
+                : (locale==="en"?"Applied ✓":"Отклик отправлен ✓");
+          return (
+            <article className="panel match-detail" key={match.id}>
+              <div className="match-detail-top">
+                <div><span className={`verdict ${match.verdict}`}>{t[match.verdict]}</span><h2>{match.job.title}</h2><p>{match.job.company} · {match.job.location}</p></div>
+                <div className={`big-score ${match.verdict}`}><strong>{Math.round(match.score)}%</strong><span>{t.fit}</span></div>
+              </div>
+              <div className="analysis-grid">
+                <div><h4>✓ {t.matchingSkills}</h4><div className="skill-row">{match.matching_skills.map(skill=><span className="tag positive" key={skill}>{skill}</span>)}</div></div>
+                <div><h4>! {t.skillGaps}</h4><div className="skill-row">{match.skill_gaps.map(skill=><span className="tag gap" key={skill}>{skill}</span>)}</div></div>
+              </div>
+              <div className="reason-list">{match.reasons.map(reason=><span key={reason}>✦ {reason}</span>)}</div>
+              <div className="job-actions">
+                <a className="ghost-button" href={match.job.url} target="_blank" rel="noreferrer">{t.openOriginal}<ArrowUpRight size={15}/></a>
+                <button
+                  className={`ghost-button applied-action ${alreadyApplied?"done":""}`}
+                  onClick={()=>!alreadyApplied && markApplied(match.job.id)}
+                  disabled={applyingId===match.job.id || alreadyApplied}
+                >
+                  {alreadyApplied?<CheckCircle2 size={16}/>:null}
+                  {applyingId===match.job.id
+                    ? (locale==="en"?"Saving…":"Сохраняем…")
+                    : (alreadyApplied?appliedLabel:t.markApplied)}
+                </button>
+                <button className="primary-button" onClick={()=>onPrepare(match.job.id)}>{t.prepare}<Sparkles size={16}/></button>
+              </div>
+            </article>
+          );
+        })}
         {!matches.length && <EmptyState text={t.noMatches}/>}
       </div>
     </>
   );
 }
+
 
 function ApplicationsPage({ applications, locale }: { applications: Application[]; locale: Locale }) {
   const t = messages[locale];
