@@ -184,10 +184,12 @@ def enrich_jobs_task(user_id: str) -> dict:
 def scan_jobs_task(limit: int = 100, user_id: str | None = None) -> dict:
     result = asyncio.run(_scan(limit, user_id))
     if user_id and settings.openai_api_key:
-        enrich_jobs_task.delay(user_id)
+        ai_task = enrich_jobs_task.delay(user_id)
         result["ai_enrichment_queued"] = True
+        result["ai_task_id"] = ai_task.id
     else:
         result["ai_enrichment_queued"] = False
+        result["ai_task_id"] = None
     return result
 
 
