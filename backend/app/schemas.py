@@ -47,6 +47,8 @@ class ProfileRead(ProfileUpdate):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     user_id: UUID
+    ai_profile: dict = {}
+    ai_profile_updated_at: datetime | None = None
 
 
 class ResumeRead(BaseModel):
@@ -76,6 +78,8 @@ class JobRead(BaseModel):
     last_checked_at: datetime | None
     is_active: bool
     closed_at: datetime | None
+    ai_analysis: dict = {}
+    ai_analyzed_at: datetime | None = None
 
 
 class MatchRead(BaseModel):
@@ -85,6 +89,7 @@ class MatchRead(BaseModel):
     skill_gaps: list[str]
     reasons: list[str]
     verdict: str
+    ai_explanation: dict = {}
     job: JobRead
 
 
@@ -99,6 +104,10 @@ class ApplicationRead(BaseModel):
     notes: str
     tailored_summary: str
     cover_letter: str
+    recruiter_message: str = ""
+    interview_points: list[str] = []
+    caution_notes: list[str] = []
+    agent_trace: list[str] = []
     job: JobRead
 
 
@@ -109,3 +118,17 @@ class DashboardStats(BaseModel):
     applied: int
     interviews: int
     offers: int
+
+
+class CareerInsightRead(BaseModel):
+    summary: str
+    recurring_gaps: list[str]
+    strongest_skills: list[str]
+    target_role_observations: list[str]
+    recommended_actions: list[str]
+    ai_enriched: bool = False
+
+
+class MatchAnalysisRead(BaseModel):
+    match: MatchRead
+    explanation: dict
