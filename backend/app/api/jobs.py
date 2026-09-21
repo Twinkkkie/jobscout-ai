@@ -57,6 +57,8 @@ async def scan_status(task_id: str, user: User = Depends(get_current_user)) -> d
         payload["result"] = task.result
     elif task.failed():
         payload["error"] = str(task.result)
+    elif isinstance(task.info, dict):
+        payload["meta"] = task.info
     return payload
 
 
