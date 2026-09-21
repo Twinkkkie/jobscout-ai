@@ -39,6 +39,8 @@ class CandidateProfile(Base):
     min_salary_usd: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     remote_only: Mapped[bool] = mapped_column(Boolean(), default=True)
     exclude_keywords: Mapped[list] = mapped_column(JSONB, default=list)
+    ai_profile: Mapped[dict] = mapped_column(JSONB, default=dict)
+    ai_profile_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
@@ -78,6 +80,8 @@ class Job(Base):
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean(), default=True, index=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ai_analysis: Mapped[dict] = mapped_column(JSONB, default=dict)
+    ai_analyzed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class JobMatch(Base):
@@ -92,6 +96,7 @@ class JobMatch(Base):
     skill_gaps: Mapped[list] = mapped_column(JSONB, default=list)
     reasons: Mapped[list] = mapped_column(JSONB, default=list)
     verdict: Mapped[str] = mapped_column(String(32), default="maybe")
+    ai_explanation: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
@@ -107,5 +112,9 @@ class Application(Base):
     notes: Mapped[str] = mapped_column(Text(), default="")
     tailored_summary: Mapped[str] = mapped_column(Text(), default="")
     cover_letter: Mapped[str] = mapped_column(Text(), default="")
+    recruiter_message: Mapped[str] = mapped_column(Text(), default="")
+    interview_points: Mapped[list] = mapped_column(JSONB, default=list)
+    caution_notes: Mapped[list] = mapped_column(JSONB, default=list)
+    agent_trace: Mapped[list] = mapped_column(JSONB, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
