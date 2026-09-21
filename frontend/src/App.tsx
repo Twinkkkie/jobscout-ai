@@ -368,8 +368,8 @@ function App() {
               api={api}
               onUploaded={async () => {
                 await refresh();
-                setPage("profile");
               }}
+              onContinue={() => setPage("profile")}
             />
           )}
 
@@ -747,31 +747,38 @@ function ResumePage({
   locale,
   api,
   onUploaded,
+  onContinue,
 }: {
   locale: Locale;
   api: (path:string, options?:RequestInit)=>Promise<any>;
   onUploaded: ()=>Promise<void>;
+  onContinue: ()=>void;
 }) {
   const t=messages[locale];
   const [file,setFile]=useState<File|null>(null);
   const [busy,setBusy]=useState(false);
   const [result,setResult]=useState<any>(null);
+  const [uploadError,setUploadError]=useState("");
   const submit=async()=>{
     if(!file)return;
     setBusy(true);
+    setUploadError("");
     const data=new FormData();
     data.append("file",file);
     try{
       const uploaded=await api("/resumes",{method:"POST",body:data});
       setResult(uploaded);
       await onUploaded();
+    }catch(err){
+      setUploadError(err instanceof Error?err.message:"Resume analysis failed");
     }finally{
       setBusy(false);
     }
   };
+  const parsed=result?.extracted_profile;
   return (
     <>
-      <div className="page-heading"><div><span className="eyebrow">AI PROFILE</span><h1>{t.uploadResume}</h1><p>{locale==="en"?"Upload once, review the extracted profile, then edit anything you want.":"Загрузи резюме, проверь извлеченный профиль и исправь все, что нужно."}</p></div></div>
+      <div className="page-heading"><div><span className="eyebrow">AI PROFILE</span><h1>{t.uploadResume}</h1><p>{locale==="en"?"Choose a resume, then click Upload & analyze. The extracted profile will appear on the right before you continue.":"Выбери резюме и нажми «Загрузить и проанализировать». Справа появится результат разбора, и только потом можно перейти в профиль."}</p></div></div>
       <div className="resume-layout">
         <section className="panel upload-zone">
           <Upload size={42}/>
@@ -783,7 +790,7 @@ function ResumePage({
               className="native-file-input"
               type="file"
               accept=".pdf,.docx,.txt"
-              onChange={e=>setFile(e.target.files?.[0]||null)}
+              onChange={e=>{setFile(e.target.files?.[0]||null);setResult(null);setUploadError("");}}
             />
             <label className="file-picker-button" htmlFor="resume-file">
               <Upload size={17}/>
@@ -796,16 +803,42 @@ function ResumePage({
           <button className="primary-button" disabled={!file||busy} onClick={submit}>
             {busy?(locale==="en"?"Analyzing…":"Анализируем…"):t.upload}
           </button>
+          {uploadError&&<span className="save-error">{uploadError}</span>}
         </section>
         <section className="panel parsing-preview">
           <Sparkles size={22}/>
-          <h3>{locale==="en"?"AI parsing preview":"Предпросмотр AI-разбора"}</h3>
-          {result ? <pre>{JSON.stringify(result.extracted_profile,null,2)}</pre> : <p>{locale==="en"?"Your extracted roles, skills and experience will appear here.":"Здесь появятся найденные роли, навыки и опыт."}</p>}
+          <div className="parsing-title-row">
+            <h3>{locale==="en"?"Resume analysis preview":"Предпросмотр разбора резюме"}</h3>
+            {result&&<span className="analysis-badge">{locale==="en"?"Parsed":"Разобрано"}</span>}
+          </div>
+          {!result&&<p>{locale==="en"?"Nothing has been analyzed yet. Choose a file and click Upload & analyze.":"Анализ еще не запускался. Выбери файл и нажми «Загрузить и проанализировать»."}</p>}
+          {parsed&&(
+            <div className="parsed-profile">
+              <div>
+                <span className="parsed-label">{locale==="en"?"Target roles":"Целевые роли"}</span>
+                <div className="skill-row">{(parsed.target_roles||[]).map((role:string)=><span className="tag positive" key={role}>{role}</span>)}</div>
+              </div>
+              <div>
+                <span className="parsed-label">{locale==="en"?"Skills":"Навыки"}</span>
+                <div className="skill-row">{(parsed.skills||[]).map((skill:string)=><span className="tag" key={skill}>{skill}</span>)}</div>
+              </div>
+              <div className="parsed-kpi">
+                <span>{locale==="en"?"Experience detected":"Найденный опыт"}</span>
+                <strong>{parsed.years_experience||0} {locale==="en"?"years":"лет"}</strong>
+              </div>
+              {parsed.summary&&<div><span className="parsed-label">{locale==="en"?"Summary":"Краткое описание"}</span><p>{parsed.summary}</p></div>}
+              <button className="primary-button" onClick={onContinue}>
+                {locale==="en"?"Review & edit profile":"Проверить и отредактировать профиль"}
+                <ArrowUpRight size={16}/>
+              </button>
+            </div>
+          )}
         </section>
       </div>
     </>
   );
 }
+
 
 function ProfilePage({
   locale,
