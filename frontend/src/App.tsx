@@ -40,6 +40,8 @@ type Job = {
   last_checked_at: string | null;
   is_active: boolean;
   closed_at: string | null;
+  ai_analysis?: Record<string, unknown>;
+  ai_analyzed_at?: string | null;
 };
 
 type Match = {
@@ -49,6 +51,14 @@ type Match = {
   skill_gaps: string[];
   reasons: string[];
   verdict: "apply" | "maybe" | "skip";
+  ai_explanation?: {
+    summary?: string;
+    strengths?: string[];
+    gaps?: string[];
+    transferable_skills?: string[];
+    application_advice?: string[];
+    ai_enriched?: boolean;
+  };
   job: Job;
 };
 
@@ -83,7 +93,23 @@ type Application = {
   notes: string;
   tailored_summary: string;
   cover_letter: string;
+  recruiter_message: string;
+  interview_points: string[];
+  caution_notes: string[];
+  agent_trace: string[];
   job: Job;
+};
+
+type CareerInsight = {
+  summary: string;
+  recurring_gaps: string[];
+  strongest_skills: string[];
+  target_role_observations: string[];
+  recommended_actions: string[];
+  ai_enriched: boolean;
+  agent: string;
+  engine: string;
+  trace: string[];
 };
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:8030/api/v1";
@@ -146,6 +172,8 @@ function App() {
   const [scanNotice, setScanNotice] = useState("");
   const [error, setError] = useState("");
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
+  const [careerInsight, setCareerInsight] = useState<CareerInsight | null>(null);
+  const [careerLoading, setCareerLoading] = useState(false);
 
   const api = useCallback(
     async (path: string, options: RequestInit = {}) => {
@@ -227,10 +255,11 @@ function App() {
           const result = state.result || {};
           const newJobs = Number(result.new_jobs || 0);
           const closedJobs = Number(result.availability?.closed || 0);
+          const aiJobs = Number(result.ai_enriched_jobs || 0);
           setScanNotice(
             locale === "en"
-              ? `${newJobs} new vacancies added${closedJobs ? ` · ${closedJobs} closed vacancies removed` : ""}`
-              : `Добавлено новых вакансий: ${newJobs}${closedJobs ? ` · закрытых убрано: ${closedJobs}` : ""}`
+              ? `${newJobs} new vacancies added${aiJobs ? ` · AI analyzed: ${aiJobs}` : ""}${closedJobs ? ` · ${closedJobs} closed removed` : ""}`
+              : `Добавлено новых вакансий: ${newJobs}${aiJobs ? ` · AI проанализировал: ${aiJobs}` : ""}${closedJobs ? ` · закрытых убрано: ${closedJobs}` : ""}`
           );
           await refresh();
           break;
