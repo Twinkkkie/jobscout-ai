@@ -260,7 +260,7 @@ def test_ai_analysis_drives_structured_gaps() -> None:
     assert "Docker" in scored["matching_skills"]
     assert "Kubernetes" in scored["matching_skills"]
     assert "AWS Bedrock" in scored["skill_gaps"]
-    assert any("AI extracted" in reason for reason in scored["reasons"])
+    assert any("Hybrid analysis found" in reason for reason in scored["reasons"])
 
 
 def test_ai_seniority_is_a_hard_constraint_even_when_title_is_ambiguous() -> None:
