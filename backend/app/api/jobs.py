@@ -26,8 +26,9 @@ async def list_jobs(
         .where(
             JobMatch.user_id == user.id,
             JobMatch.score >= 45,
+            Job.is_active.is_(True),
         )
-        .order_by(JobMatch.score.desc(), Job.published_at.desc().nullslast(), Job.collected_at.desc())
+        .order_by(Job.collected_at.desc(), JobMatch.score.desc(), Job.published_at.desc().nullslast())
     )
     if q:
         needle = f"%{q}%"
@@ -78,7 +79,11 @@ async def list_matches(
     query = (
         select(JobMatch, Job)
         .join(Job, Job.id == JobMatch.job_id)
-        .where(JobMatch.user_id == user.id, JobMatch.score >= min_score)
+        .where(
+            JobMatch.user_id == user.id,
+            JobMatch.score >= min_score,
+            Job.is_active.is_(True),
+        )
         .order_by(JobMatch.score.desc(), Job.published_at.desc().nullslast())
     )
     if verdict:
