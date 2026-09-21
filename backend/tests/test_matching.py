@@ -222,3 +222,74 @@ def test_ai_software_engineer_is_recognized_as_ai_family() -> None:
     assert scored["score"] >= 85
     assert scored["verdict"] == "apply"
     assert any("same AI role family" in reason for reason in scored["reasons"])
+
+
+
+def test_ai_analysis_drives_structured_gaps() -> None:
+    candidate = profile()
+    candidate.skills = candidate.skills + ["Docker", "Kubernetes"]
+    job = Job(
+        source="test",
+        external_id="8",
+        title="AI Platform Engineer",
+        company="Example",
+        location="Remote",
+        remote_region="Worldwide",
+        description="Build AI platform services.",
+        tags=["ai"],
+        salary_min=None,
+        salary_max=None,
+        currency="USD",
+        url="https://example.com/job8",
+        ai_analysis={
+            "ai_enriched": True,
+            "role_family": "ai",
+            "seniority": "middle",
+            "must_have_skills": ["Python", "FastAPI", "LangGraph", "AWS Bedrock"],
+            "nice_to_have_skills": ["Docker", "Kubernetes"],
+            "years_required": 3,
+        },
+    )
+
+    scored = score_job(candidate, job)
+
+    assert "Python" in scored["matching_skills"]
+    assert "FastAPI" in scored["matching_skills"]
+    assert "LangGraph" in scored["matching_skills"]
+    assert "Docker" in scored["matching_skills"]
+    assert "Kubernetes" in scored["matching_skills"]
+    assert "AWS Bedrock" in scored["skill_gaps"]
+    assert any("AI extracted" in reason for reason in scored["reasons"])
+
+
+def test_ai_seniority_is_a_hard_constraint_even_when_title_is_ambiguous() -> None:
+    candidate = profile()
+    candidate.seniority_levels = ["junior", "middle"]
+    job = Job(
+        source="test",
+        external_id="9",
+        title="AI Engineer",
+        company="Example",
+        location="Remote",
+        remote_region="Europe",
+        description="Python, FastAPI, RAG and LangGraph.",
+        tags=["ai"],
+        salary_min=None,
+        salary_max=None,
+        currency="USD",
+        url="https://example.com/job9",
+        ai_analysis={
+            "ai_enriched": True,
+            "role_family": "ai",
+            "seniority": "senior",
+            "must_have_skills": ["Python", "FastAPI", "RAG", "LangGraph"],
+            "nice_to_have_skills": [],
+            "years_required": 5,
+        },
+    )
+
+    scored = score_job(candidate, job)
+
+    assert scored["score"] < 45
+    assert scored["verdict"] == "skip"
+    assert any("outside your selected levels" in reason for reason in scored["reasons"])
