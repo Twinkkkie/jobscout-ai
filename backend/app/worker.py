@@ -99,19 +99,21 @@ async def _enrich_user_jobs(user_id: str) -> dict:
             key=lambda job: score_job(profile, job)["score"],
             reverse=True,
         )
-        candidates = candidates[:10]
+        candidates = candidates[:20]
 
-        analyses = await analyze_vacancies_batch_ai(candidates)
         enriched = 0
         now = datetime.now(UTC)
-        for job in candidates:
-            analysis = analyses.get(str(job.id))
-            if not analysis:
-                continue
-            job.ai_analysis = analysis
-            if analysis.get("ai_enriched"):
-                job.ai_analyzed_at = now
-                enriched += 1
+        for start in range(0, len(candidates), 10):
+            batch = candidates[start : start + 10]
+            analyses = await analyze_vacancies_batch_ai(batch)
+            for job in batch:
+                analysis = analyses.get(str(job.id))
+                if not analysis:
+                    continue
+                job.ai_analysis = analysis
+                if analysis.get("ai_enriched"):
+                    job.ai_analyzed_at = now
+                    enriched += 1
 
         await db.commit()
 
