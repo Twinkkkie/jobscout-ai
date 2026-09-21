@@ -61,6 +61,7 @@ async def _scan(limit: int, user_id: str | None) -> dict:
             UUID(user_id),
             limit,
             defer_ai=True,
+            defer_availability=True,
         )
 
 
