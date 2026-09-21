@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from html import unescape
@@ -30,17 +31,34 @@ def _clean_html(value: str) -> str:
     return re.sub(r"\s+", " ", unescape(text)).strip()
 
 
-def _parse_date(value: str | None) -> datetime | None:
-    if not value:
+def _parse_date(value: str | int | float | None) -> datetime | None:
+    if value is None or value == "":
         return None
+    if isinstance(value, (int, float)):
+        seconds = value / 1000 if value > 10_000_000_000 else value
+        return datetime.fromtimestamp(seconds, tz=UTC)
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
         return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
     except ValueError:
         return None
 
 
-async def collect_remoteok(limit: int = 100) -> list[CollectedJob]:
+def _annualize(value: int | float | None, period: str | None) -> int | None:
+    if value is None:
+        return None
+    multipliers = {
+        "hourly": 2080,
+        "weekly": 52,
+        "fortnightly": 26,
+        "monthly": 12,
+        "yearly": 1,
+        "annual": 1,
+    }
+    return int(value * multipliers.get((period or "annual").lower(), 1))
+
+
+async def collect_remoteok(limit: int = 50) -> list[CollectedJob]:
     headers = {"User-Agent": "JobScoutAI/0.1 (+https://github.com/Twinkkkie/jobscout-ai)"}
     async with httpx.AsyncClient(timeout=25, headers=headers) as client:
         response = await client.get("https://remoteok.com/api")
@@ -73,7 +91,7 @@ async def collect_remoteok(limit: int = 100) -> list[CollectedJob]:
     return jobs
 
 
-async def collect_wwr(limit: int = 100) -> list[CollectedJob]:
+async def collect_wwr(limit: int = 50) -> list[CollectedJob]:
     url = "https://weworkremotely.com/categories/remote-programming-jobs.rss"
     async with httpx.AsyncClient(timeout=25) as client:
         response = await client.get(url)
@@ -111,15 +129,93 @@ async def collect_wwr(limit: int = 100) -> list[CollectedJob]:
     return jobs
 
 
-async def collect_public_jobs(limit: int = 100) -> list[CollectedJob]:
-    per_source = max(10, limit // 2)
-    remoteok, wwr = await __import__("asyncio").gather(
+async def collect_himalayas(limit: int = 40) -> list[CollectedJob]:
+    jobs: list[CollectedJob] = []
+    cursor: str | None = None
+
+    async with httpx.AsyncClient(timeout=25) as client:
+        while len(jobs) < limit:
+            params: dict[str, Any] = {"limit": min(20, limit - len(jobs))}
+            if cursor:
+                params["cursor"] = cursor
+            response = await client.get("https://himalayas.app/jobs/api", params=params)
+            response.raise_for_status()
+            payload = response.json()
+
+            for item in payload.get("jobs", []):
+                regions = item.get("locationRestrictions") or []
+                timezone = item.get("timezoneRestrictions") or []
+                remote_region = ", ".join(regions) or "Worldwide"
+                if timezone:
+                    remote_region += " · TZ " + ", ".join(map(str, timezone))
+                period = item.get("salaryPeriod")
+                jobs.append(
+                    CollectedJob(
+                        source="Himalayas",
+                        external_id=str(item.get("guid") or item.get("applicationLink")),
+                        title=item.get("title", ""),
+                        company=item.get("companyName", ""),
+                        location="Remote",
+                        remote_region=remote_region,
+                        description=_clean_html(item.get("description") or item.get("excerpt", "")),
+                        tags=list(item.get("categories") or item.get("parentCategories") or []),
+                        salary_min=_annualize(item.get("minSalary"), period),
+                        salary_max=_annualize(item.get("maxSalary"), period),
+                        currency=item.get("currency") or "USD",
+                        url=item.get("applicationLink") or "https://himalayas.app/jobs",
+                        published_at=_parse_date(item.get("pubDate")),
+                    )
+                )
+            cursor = payload.get("nextCursor")
+            if not cursor:
+                break
+    return jobs[:limit]
+
+
+async def collect_jobicy(limit: int = 50) -> list[CollectedJob]:
+    async with httpx.AsyncClient(timeout=25) as client:
+        response = await client.get(
+            "https://jobicy.com/api/v2/remote-jobs",
+            params={"count": min(100, limit), "industry": "engineering"},
+        )
+        response.raise_for_status()
+        payload = response.json()
+
+    jobs: list[CollectedJob] = []
+    for item in payload.get("jobs", []):
+        period = item.get("salaryPeriod")
+        tags = list(item.get("jobIndustry") or []) + list(item.get("jobType") or [])
+        jobs.append(
+            CollectedJob(
+                source="Jobicy",
+                external_id=str(item.get("id") or item.get("url")),
+                title=item.get("jobTitle", ""),
+                company=item.get("companyName", ""),
+                location="Remote",
+                remote_region=item.get("jobGeo") or "Remote / unspecified",
+                description=_clean_html(item.get("jobDescription") or item.get("jobExcerpt", "")),
+                tags=tags,
+                salary_min=_annualize(item.get("salaryMin"), period),
+                salary_max=_annualize(item.get("salaryMax"), period),
+                currency=item.get("salaryCurrency") or "USD",
+                url=item.get("url") or "https://jobicy.com/jobs",
+                published_at=_parse_date(item.get("pubDate")),
+            )
+        )
+    return jobs[:limit]
+
+
+async def collect_public_jobs(limit: int = 160) -> list[CollectedJob]:
+    per_source = max(20, min(50, limit // 4))
+    results = await asyncio.gather(
         collect_remoteok(per_source),
         collect_wwr(per_source),
+        collect_himalayas(per_source),
+        collect_jobicy(per_source),
         return_exceptions=True,
     )
     combined: list[CollectedJob] = []
-    for result in (remoteok, wwr):
+    for result in results:
         if isinstance(result, list):
             combined.extend(result)
     return combined[:limit]
