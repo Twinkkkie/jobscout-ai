@@ -115,6 +115,7 @@ async def list_matches(
 async def analyze_match(
     job_id: UUID,
     queue_ai: bool = Query(default=True),
+    locale: str = Query(default="en", pattern="^(en|ru)$"),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> MatchAnalysisRead:
@@ -148,7 +149,7 @@ async def analyze_match(
         match = JobMatch(user_id=user.id, job_id=job.id)
         db.add(match)
 
-    explanation = await explain_match_ai(profile, job, scored)
+    explanation = await explain_match_ai(profile, job, scored, locale=locale)
     match.score = scored["score"]
     match.matching_skills = scored["matching_skills"]
     match.skill_gaps = scored["skill_gaps"]
@@ -160,7 +161,7 @@ async def analyze_match(
 
     task_id = None
     if queue_ai and settings.openai_api_key and not has_current_ai:
-        task = analyze_job_match_task.delay(str(user.id), str(job.id))
+        task = analyze_job_match_task.delay(str(user.id), str(job.id), locale)
         task_id = task.id
 
     read = MatchRead(
