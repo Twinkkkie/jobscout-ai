@@ -4,11 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.application import run_application_agent
 from app.db import get_db
 from app.deps import get_current_user
 from app.models import Application, CandidateProfile, Job, Resume, User
 from app.schemas import ApplicationRead, ApplicationUpsert, JobRead
-from app.services.application_ai import prepare_application
 
 router = APIRouter(prefix="/applications", tags=["applications"])
 
@@ -20,6 +20,10 @@ def _read(application: Application, job: Job) -> ApplicationRead:
         notes=application.notes,
         tailored_summary=application.tailored_summary,
         cover_letter=application.cover_letter,
+        recruiter_message=application.recruiter_message,
+        interview_points=application.interview_points,
+        caution_notes=application.caution_notes,
+        agent_trace=application.agent_trace,
         job=JobRead.model_validate(job),
     )
 
@@ -72,13 +76,19 @@ async def prepare(
         .where(Resume.user_id == user.id)
         .order_by(Resume.created_at.desc())
     )
-    summary, letter = await prepare_application(
+    agent_result = await run_application_agent(
+        db,
         profile,
         job,
         latest_resume.extracted_text if latest_resume else "",
     )
-    application.tailored_summary = summary
-    application.cover_letter = letter
+    pack = agent_result["pack"]
+    application.tailored_summary = pack.get("tailored_summary", "")
+    application.cover_letter = pack.get("cover_letter", "")
+    application.recruiter_message = pack.get("recruiter_message", "")
+    application.interview_points = pack.get("interview_points", [])
+    application.caution_notes = pack.get("caution_notes", [])
+    application.agent_trace = agent_result.get("trace", [])
     await db.commit()
     await db.refresh(application)
     return _read(application, job)
