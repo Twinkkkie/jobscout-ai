@@ -11,8 +11,7 @@ from app.db import get_db
 from app.deps import get_current_user
 from app.models import CandidateProfile, Resume, User
 from app.schemas import ResumeRead
-from app.worker import rebuild_matches_task
-from app.services.resume_ai import analyze_resume_ai
+from app.worker import enrich_resume_task, rebuild_matches_task
 from app.services.resume_parser import UnsupportedResume, extract_text, infer_profile
 
 router = APIRouter(prefix="/resumes", tags=["resumes"])
@@ -38,7 +37,7 @@ async def upload_resume(
         raise HTTPException(status_code=422, detail="No readable text found in resume")
 
     deterministic = infer_profile(text)
-    extracted = await analyze_resume_ai(text, deterministic)
+    extracted = deterministic
     upload_dir = Path(settings.upload_dir) / str(user.id)
     upload_dir.mkdir(parents=True, exist_ok=True)
     safe_name = f"{uuid4()}_{Path(file.filename or 'resume').name}"
@@ -65,8 +64,7 @@ async def upload_resume(
             profile.years_experience = extracted["years_experience"]
         if not profile.summary and extracted.get("summary"):
             profile.summary = extracted["summary"]
-        profile.ai_profile = extracted
-        profile.ai_profile_updated_at = datetime.now(UTC)
+        profile.ai_profile = {**extracted, "ai_enriched": False}
 
     await db.commit()
     await db.refresh(resume)
@@ -75,9 +73,12 @@ async def upload_resume(
     # slow or the background worker is temporarily unavailable.
     if profile:
         try:
-            rebuild_matches_task.delay(str(user.id))
+            enrich_resume_task.delay(str(user.id), str(resume.id))
         except Exception:
-            pass
+            try:
+                rebuild_matches_task.delay(str(user.id))
+            except Exception:
+                pass
 
     return resume
 
