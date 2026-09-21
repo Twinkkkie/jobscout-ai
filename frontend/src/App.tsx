@@ -112,6 +112,14 @@ type CareerInsight = {
   trace: string[];
 };
 
+type AgentStatus = {
+  openai_configured: boolean;
+  model: string;
+  langgraph_available: boolean;
+  agents: string[];
+  human_review_required: boolean;
+};
+
 const API = import.meta.env.VITE_API_URL || "http://localhost:8030/api/v1";
 
 function splitCsv(value: string) {
@@ -174,6 +182,7 @@ function App() {
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [careerInsight, setCareerInsight] = useState<CareerInsight | null>(null);
   const [careerLoading, setCareerLoading] = useState(false);
+  const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
 
   const api = useCallback(
     async (path: string, options: RequestInit = {}) => {
@@ -210,18 +219,20 @@ function App() {
     if (!token) return;
     setError("");
     try {
-      const [statsData, matchData, jobsData, appData, profileData] = await Promise.all([
+      const [statsData, matchData, jobsData, appData, profileData, agentStatusData] = await Promise.all([
         api("/dashboard/stats"),
         api("/jobs/matches?limit=50"),
         api("/jobs?limit=80"),
         api("/applications"),
         api("/profile"),
+        api("/agents/status"),
       ]);
       setStats(statsData);
       setMatches(matchData);
       setJobs(jobsData);
       setApplications(appData);
       setProfile(profileData);
+      setAgentStatus(agentStatusData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Request failed");
     }
@@ -401,6 +412,7 @@ function App() {
               scanning={scanning}
               careerInsight={careerInsight}
               careerLoading={careerLoading}
+              agentStatus={agentStatus}
               onCareer={async () => {
                 setCareerLoading(true);
                 try {
@@ -658,6 +670,7 @@ function DashboardPage({
   scanning,
   careerInsight,
   careerLoading,
+  agentStatus,
   onCareer,
   onPrepare,
 }: {
@@ -669,6 +682,7 @@ function DashboardPage({
   scanning: boolean;
   careerInsight: CareerInsight | null;
   careerLoading: boolean;
+  agentStatus: AgentStatus | null;
   onCareer: () => Promise<void>;
   onPrepare: (jobId: string) => Promise<void>;
 }) {
@@ -726,7 +740,16 @@ function DashboardPage({
           </section>
           <section className="panel career-card">
             <Sparkles size={22} />
-            <h3>{locale === "en" ? "Career Agent" : "Career Agent"}</h3>
+            <div className="career-title-row">
+              <h3>Career Agent</h3>
+              {agentStatus&&(
+                <span className={`ai-runtime-pill ${agentStatus.openai_configured?"ready":"fallback"}`}>
+                  {agentStatus.openai_configured
+                    ? (agentStatus.langgraph_available?"AI · LangGraph":"AI · fallback graph")
+                    : (locale==="en"?"AI key not configured":"AI-ключ не подключен")}
+                </span>
+              )}
+            </div>
             {careerInsight ? (
               <>
                 <p>{careerInsight.summary}</p>
