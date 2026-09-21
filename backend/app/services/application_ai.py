@@ -111,14 +111,14 @@ target roles: {profile.target_roles}
 AI resume profile: {profile.ai_profile or {}}
 
 Resume:
-{resume_text[:14000]}
+{resume_text[:8000]}
 
 Vacancy:
 title: {job.title}
 company: {job.company}
 location: {job.location}
 description:
-{job.description[:14000]}
+{job.description[:8000]}
 
 Structured vacancy analysis:
 {job.ai_analysis or {}}
@@ -126,7 +126,7 @@ Structured vacancy analysis:
 Hybrid match:
 {match}
 """
-    parsed = await ask_openai_json(prompt)
+    parsed = await ask_openai_json(prompt, max_output_tokens=1800)
     if not parsed:
         return fallback
 
