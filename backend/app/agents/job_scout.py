@@ -1,11 +1,14 @@
+import asyncio
 from datetime import UTC, datetime
 from typing import Any, TypedDict
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models import CandidateProfile, Job
 from app.services.availability import verify_job_availability
+from app.services.matching import score_job
 from app.services.orchestrator import rebuild_matches, sync_jobs
 from app.services.vacancy_ai import analyze_vacancy_ai
 
@@ -39,19 +42,49 @@ async def _check_availability(state: JobScoutState) -> dict:
 
 async def _enrich_vacancies(state: JobScoutState) -> dict:
     db = state["db"]
+
+    # Without an API key there is nothing expensive to enrich; deterministic
+    # matching remains available and the scan should finish immediately.
+    if not settings.openai_api_key:
+        return {
+            "enriched": 0,
+            "trace": state.get("trace", []) + ["ai_enrichment_skipped:no_api_key"],
+        }
+
+    profile = await db.scalar(
+        select(CandidateProfile).where(CandidateProfile.user_id == state["user_id"])
+    )
+    if profile is None:
+        return {"enriched": 0, "trace": state.get("trace", []) + ["ai_enrichment_skipped:no_profile"]}
+
     result = await db.execute(
         select(Job)
         .where(Job.is_active.is_(True))
         .order_by(Job.collected_at.desc())
-        .limit(25)
+        .limit(50)
     )
-    jobs = list(result.scalars().all())
-    enriched = 0
+    recent_jobs = list(result.scalars().all())
 
-    for job in jobs:
-        if (job.ai_analysis or {}).get("ai_enriched"):
-            continue
-        analysis = await analyze_vacancy_ai(job)
+    # Use the cheap deterministic matcher as a first-stage filter, then spend
+    # LLM calls only on the most promising vacancies.
+    candidates = [
+        job
+        for job in recent_jobs
+        if not (job.ai_analysis or {}).get("ai_enriched")
+        and score_job(profile, job)["score"] >= 40
+    ]
+    candidates.sort(key=lambda job: score_job(profile, job)["score"], reverse=True)
+    candidates = candidates[:10]
+
+    semaphore = asyncio.Semaphore(4)
+
+    async def analyze(job: Job) -> tuple[Job, dict]:
+        async with semaphore:
+            return job, await analyze_vacancy_ai(job)
+
+    results = await asyncio.gather(*(analyze(job) for job in candidates))
+    enriched = 0
+    for job, analysis in results:
         job.ai_analysis = analysis
         if analysis.get("ai_enriched"):
             job.ai_analyzed_at = datetime.now(UTC)
