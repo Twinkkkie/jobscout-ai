@@ -1351,13 +1351,26 @@ function ProfilePage({
 
 function JobMatchModal({match,locale,onClose}:{match:Match;locale:Locale;onClose:()=>void}) {
   const t=messages[locale];
+  const explanation=match.ai_explanation || {};
   return <div className="modal-backdrop" onClick={onClose}><div className="modal-card match-modal" onClick={e=>e.stopPropagation()}>
     <button className="modal-close" onClick={onClose}><X/></button>
-    <span className="eyebrow">MATCH ANALYSIS</span>
+    <span className="eyebrow">AI MATCH ANALYSIS</span>
     <div className="match-modal-head">
-      <div><h2>{match.job.title}</h2><p className="muted">{match.job.company} · {match.job.location}</p></div>
+      <div><h2>{decodeHtmlEntities(match.job.title)}</h2><p className="muted">{decodeHtmlEntities(match.job.company)} · {decodeHtmlEntities(match.job.location || match.job.remote_region)}</p></div>
       <div className={`big-score ${match.verdict}`}><strong>{Math.round(match.score)}%</strong><span>{t.fit}</span></div>
     </div>
+    {explanation.summary&&(
+      <section className="ai-explanation">
+        <div className="ai-explanation-title"><Sparkles size={16}/><strong>{locale==="en"?"AI explanation":"AI-разбор"}</strong>{explanation.ai_enriched&&<span>AI</span>}</div>
+        <p>{explanation.summary}</p>
+        {!!explanation.transferable_skills?.length&&(
+          <div><small>{locale==="en"?"Transferable skills":"Переносимые навыки"}</small><div className="skill-row">{explanation.transferable_skills.map(skill=><span className="tag" key={skill}>{skill}</span>)}</div></div>
+        )}
+        {!!explanation.application_advice?.length&&(
+          <div className="ai-advice">{explanation.application_advice.map(item=><span key={item}>✦ {item}</span>)}</div>
+        )}
+      </section>
+    )}
     <div className="analysis-grid">
       <div>
         <h4>✓ {t.matchingSkills} <span className="skill-count">{match.matching_skills.length}</span></h4>
@@ -1372,7 +1385,7 @@ function JobMatchModal({match,locale,onClose}:{match:Match;locale:Locale;onClose
         <div className="skill-row">
           {match.skill_gaps.length
             ? match.skill_gaps.map(skill=><span className="tag gap" key={skill}>{skill}</span>)
-            : <span className="skill-empty">{locale==="en"?"No additional explicit technical requirements detected in the vacancy text":"В тексте вакансии не найдено дополнительных явных технических требований"}</span>}
+            : <span className="skill-empty">{locale==="en"?"No additional explicit technical requirements detected":"Дополнительных явных технических пробелов не найдено"}</span>}
         </div>
       </div>
     </div>
@@ -1385,15 +1398,27 @@ function ApplicationModal({application,locale,onClose}:{application:Application;
   const t=messages[locale];
   const summaryWords=application.tailored_summary.trim().split(/\s+/).filter(Boolean).length;
   const coverWords=application.cover_letter.trim().split(/\s+/).filter(Boolean).length;
-  return <div className="modal-backdrop" onClick={onClose}><div className="modal-card" onClick={e=>e.stopPropagation()}>
+  return <div className="modal-backdrop" onClick={onClose}><div className="modal-card application-pack-modal" onClick={e=>e.stopPropagation()}>
     <button className="modal-close" onClick={onClose}><X/></button>
-    <span className="eyebrow">APPLICATION PACK</span>
-    <h2>{application.job.title}</h2>
-    <p className="muted">{application.job.company}</p>
+    <div className="agent-heading"><span className="eyebrow">APPLICATION AGENT</span><span className="agent-reviewed"><CheckCircle2 size={13}/>{locale==="en"?"Fact-checked · review before sending":"Проверено агентом · проверь перед отправкой"}</span></div>
+    <h2>{decodeHtmlEntities(application.job.title)}</h2>
+    <p className="muted">{decodeHtmlEntities(application.job.company)}</p>
     <div className="application-section-title"><h3>{t.tailoredSummary}</h3><span>{summaryWords} {locale==="en"?"words":"слов"}</span></div>
     <div className="copy-box">{application.tailored_summary}</div>
     <div className="application-section-title"><h3>{t.coverLetter}</h3><span>{coverWords} {locale==="en"?"words":"слов"}</span></div>
     <div className="copy-box letter">{application.cover_letter}</div>
+    {application.recruiter_message&&<>
+      <div className="application-section-title"><h3>{locale==="en"?"Recruiter message":"Сообщение рекрутеру"}</h3></div>
+      <div className="copy-box">{application.recruiter_message}</div>
+    </>}
+    {!!application.interview_points?.length&&<>
+      <div className="application-section-title"><h3>{locale==="en"?"Interview talking points":"Что подчеркнуть на интервью"}</h3></div>
+      <div className="application-list">{application.interview_points.map(item=><span key={item}>✦ {item}</span>)}</div>
+    </>}
+    {!!application.caution_notes?.length&&<>
+      <div className="application-section-title"><h3>{locale==="en"?"Do not overclaim":"Не преувеличивать"}</h3></div>
+      <div className="caution-list">{application.caution_notes.map(item=><span key={item}>! {item}</span>)}</div>
+    </>}
     <a className="primary-button link-button" href={application.job.url} target="_blank" rel="noreferrer">{t.openOriginal}<ArrowUpRight size={16}/></a>
   </div></div>;
 }
