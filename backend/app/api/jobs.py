@@ -20,7 +20,15 @@ async def list_jobs(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> list[Job]:
-    query = select(Job).order_by(Job.published_at.desc().nullslast(), Job.collected_at.desc())
+    query = (
+        select(Job)
+        .join(JobMatch, JobMatch.job_id == Job.id)
+        .where(
+            JobMatch.user_id == user.id,
+            JobMatch.score >= 45,
+        )
+        .order_by(JobMatch.score.desc(), Job.published_at.desc().nullslast(), Job.collected_at.desc())
+    )
     if q:
         needle = f"%{q}%"
         query = query.where(
