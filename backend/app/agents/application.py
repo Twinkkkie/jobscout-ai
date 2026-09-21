@@ -28,7 +28,7 @@ class ApplicationAgentState(TypedDict, total=False):
 
 async def _analyze_vacancy(state: ApplicationAgentState) -> dict:
     job = state["job"]
-    if not (job.ai_analysis or {}).get("ai_enriched"):
+    if not ((job.ai_analysis or {}).get("ai_enriched") and (job.ai_analysis or {}).get("analysis_version") == 2):
         analysis = await analyze_vacancy_ai(job)
         job.ai_analysis = analysis
         if analysis.get("ai_enriched"):
