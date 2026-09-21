@@ -5,6 +5,8 @@ from app.models import Job
 from app.services.ai_utils import ask_openai_json, clean_string_list
 
 
+VACANCY_ANALYSIS_VERSION = 2
+
 ALLOWED_ROLE_FAMILIES = {
     "ai", "python", "backend", "software", "ml", "data", "frontend",
     "web", "devops", "product", "other",
@@ -51,6 +53,7 @@ def fallback_vacancy_analysis(job: Job) -> dict[str, Any]:
         "remote_policy": "remote" if "remote" in f"{job.location} {job.remote_region}".lower() else "",
         "summary": "",
         "ai_enriched": False,
+        "analysis_version": 0,
     }
 
 
@@ -90,6 +93,7 @@ def _normalize_analysis(job: Job, parsed: dict[str, Any] | None) -> dict[str, An
         "remote_policy": str(parsed.get("remote_policy") or "").strip()[:200],
         "summary": str(parsed.get("summary") or "").strip()[:1200],
         "ai_enriched": True,
+        "analysis_version": VACANCY_ANALYSIS_VERSION,
         "analyzed_at": datetime.now(UTC).isoformat(),
     }
 
