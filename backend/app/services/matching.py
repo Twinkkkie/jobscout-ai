@@ -280,6 +280,36 @@ def _ordered_skills(keys: set[str]) -> list[str]:
     return [canonical for canonical in SKILL_ALIASES if canonical in keys]
 
 
+def _canonical_for_profile_skill(skill: str) -> str | None:
+    for canonical, aliases in SKILL_ALIASES.items():
+        if _has_alias(skill, canonical) or any(_has_alias(skill, alias) for alias in aliases):
+            return canonical
+    return None
+
+
+def _display_label_for_requirement(canonical: str, skills: list[str]) -> str:
+    """Prefer the candidate's own skill label for a matched canonical requirement."""
+    for skill in skills:
+        if _canonical_for_profile_skill(skill) == canonical:
+            return skill
+    return canonical
+
+
+def _unknown_profile_matches(skills: list[str], job_text: str) -> list[str]:
+    """
+    Preserve exact profile skills that are mentioned by the vacancy but are not
+    represented by the canonical catalogue. These count as real overlap and
+    keep the UI/scoring aligned without inventing gaps we cannot detect.
+    """
+    matched: list[str] = []
+    for skill in skills:
+        if _canonical_for_profile_skill(skill) is not None:
+            continue
+        if len(skill.strip()) >= 2 and _has_alias(job_text, skill):
+            matched.append(skill)
+    return list(dict.fromkeys(matched))
+
+
 def _role_score(target_roles: list[str], title: str) -> tuple[float, str | None]:
     title_lower = title.lower()
     targets = [role.lower() for role in target_roles if role]
@@ -349,14 +379,17 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
     required_keys = _job_skill_keys(job_text)
     matched_keys = candidate_keys & required_keys
 
-    catalogue_matches = _ordered_skills(matched_keys)
-    direct_matches = _direct_profile_matches(skills, job_text)
-    tag_matches, tag_gaps = _tag_requirements(job.tags or [], skills)
+    matching = [
+        _display_label_for_requirement(key, skills)
+        for key in _ordered_skills(matched_keys)
+    ]
+    matching.extend(_unknown_profile_matches(skills, job_text))
+    matching = list(dict.fromkeys(matching))
+    gaps = _ordered_skills(required_keys - candidate_keys)
 
-    matching = list(dict.fromkeys(direct_matches + catalogue_matches + tag_matches))
-    gaps = list(
-        dict.fromkeys(_ordered_skills(required_keys - candidate_keys) + tag_gaps)
-    )
+    # One source of truth for both the percentage and the UI. If the UI shows
+    # 9 matching skills and 2 gaps, the scoring reasons must use 9 of 11 too.
+    detected_requirement_count = len(matching) + len(gaps)
 
     excluded = [word for word in (profile.exclude_keywords or []) if word.lower() in job_text]
 
@@ -372,6 +405,7 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
 
     selected_seniority = {level.lower() for level in (profile.seniority_levels or [])}
     detected_seniority = _detected_seniority(job.title, job.tags or [])
+    seniority_mismatch = False
     if selected_seniority and detected_seniority:
         if detected_seniority in selected_seniority:
             score += 7.0
@@ -379,17 +413,17 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
                 f"The vacancy seniority ({detected_seniority}) matches your selected level."
             )
         else:
-            score -= 22.0
+            seniority_mismatch = True
             reasons.append(
                 f"The vacancy seniority ({detected_seniority}) is outside your selected levels."
             )
 
-    if required_keys:
-        coverage = len(matched_keys) / len(required_keys)
+    if detected_requirement_count:
+        coverage = len(matching) / detected_requirement_count
         skill_points = 40.0 * coverage
         score += skill_points
         reasons.append(
-            f"You match {len(matched_keys)} of {len(required_keys)} detected technical requirements."
+            f"You match {len(matching)} of {detected_requirement_count} detected technical requirements."
         )
     else:
         score += 20.0
@@ -437,9 +471,14 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
         score -= min(50.0, 20.0 * len(excluded))
         reasons.append("Excluded keywords detected: " + ", ".join(excluded))
 
-    if not role_relevant and len(matched_keys) < 2:
+    if not role_relevant and len(matching) < 2:
         score = min(score, 35.0)
         reasons.append("The vacancy title is outside your target role families.")
+
+    # Selected seniority is a search constraint, not a soft preference.
+    # Example: Junior + Middle must not surface Senior / Staff / Principal roles.
+    if seniority_mismatch:
+        score = min(score, 39.0)
 
     score = max(0.0, min(100.0, round(score, 1)))
     verdict = "apply" if score >= 75 else "maybe" if score >= 55 else "skip"
