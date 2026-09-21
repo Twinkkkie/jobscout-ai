@@ -29,6 +29,7 @@ class JobScoutState(TypedDict, total=False):
     matched: int
     trace: list[str]
     defer_ai: bool
+    defer_availability: bool
 
 
 async def _collect(state: JobScoutState) -> dict:
@@ -37,6 +38,11 @@ async def _collect(state: JobScoutState) -> dict:
 
 
 async def _check_availability(state: JobScoutState) -> dict:
+    if state.get("defer_availability", True):
+        return {
+            "availability": {"checked": 0, "closed": 0, "active": 0, "uncertain": 0},
+            "trace": state.get("trace", []) + ["availability_deferred"],
+        }
     result = await verify_job_availability(state["db"], limit=30)
     return {"availability": result, "trace": state.get("trace", []) + ["check_availability"]}
 
@@ -126,6 +132,7 @@ async def run_job_scout_agent(
     user_id: Any,
     limit: int = 100,
     defer_ai: bool = True,
+    defer_availability: bool = True,
 ) -> dict[str, Any]:
     state: JobScoutState = {
         "db": db,
@@ -133,6 +140,7 @@ async def run_job_scout_agent(
         "limit": limit,
         "trace": ["job_scout_agent:start"],
         "defer_ai": defer_ai,
+        "defer_availability": defer_availability,
     }
 
     if StateGraph is None:
