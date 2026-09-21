@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from html import unescape
 
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import CandidateProfile, Job, JobMatch
@@ -19,14 +19,24 @@ def _decode_job_item(item):
 
 
 async def sync_jobs(db: AsyncSession, limit: int = 100) -> int:
-    collected = await collect_public_jobs(limit)
-    saved = 0
+    collected = [_decode_job_item(item) for item in await collect_public_jobs(limit)]
+    if not collected:
+        return 0
+
     now = datetime.now(UTC)
+    keys = [(item.source, item.external_id) for item in collected]
+    existing_rows = list(
+        (
+            await db.execute(
+                select(Job).where(tuple_(Job.source, Job.external_id).in_(keys))
+            )
+        ).scalars().all()
+    )
+    existing_by_key = {(job.source, job.external_id): job for job in existing_rows}
+
+    saved = 0
     for item in collected:
-        item = _decode_job_item(item)
-        existing = await db.scalar(
-            select(Job).where(Job.source == item.source, Job.external_id == item.external_id)
-        )
+        existing = existing_by_key.get((item.source, item.external_id))
         if existing is None:
             db.add(
                 Job(
@@ -43,6 +53,7 @@ async def sync_jobs(db: AsyncSession, limit: int = 100) -> int:
             existing.last_seen_at = now
             existing.is_active = True
             existing.closed_at = None
+
     await db.commit()
     return saved
 
