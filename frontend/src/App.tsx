@@ -1152,13 +1152,17 @@ function ProfilePage({
 
 function ApplicationModal({application,locale,onClose}:{application:Application;locale:Locale;onClose:()=>void}) {
   const t=messages[locale];
+  const summaryWords=application.tailored_summary.trim().split(/\s+/).filter(Boolean).length;
+  const coverWords=application.cover_letter.trim().split(/\s+/).filter(Boolean).length;
   return <div className="modal-backdrop" onClick={onClose}><div className="modal-card" onClick={e=>e.stopPropagation()}>
     <button className="modal-close" onClick={onClose}><X/></button>
     <span className="eyebrow">APPLICATION PACK</span>
     <h2>{application.job.title}</h2>
     <p className="muted">{application.job.company}</p>
-    <h3>{t.tailoredSummary}</h3><div className="copy-box">{application.tailored_summary}</div>
-    <h3>{t.coverLetter}</h3><div className="copy-box letter">{application.cover_letter}</div>
+    <div className="application-section-title"><h3>{t.tailoredSummary}</h3><span>{summaryWords} {locale==="en"?"words":"слов"}</span></div>
+    <div className="copy-box">{application.tailored_summary}</div>
+    <div className="application-section-title"><h3>{t.coverLetter}</h3><span>{coverWords} {locale==="en"?"words":"слов"}</span></div>
+    <div className="copy-box letter">{application.cover_letter}</div>
     <a className="primary-button link-button" href={application.job.url} target="_blank" rel="noreferrer">{t.openOriginal}<ArrowUpRight size={16}/></a>
   </div></div>;
 }
