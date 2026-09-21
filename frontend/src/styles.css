@@ -297,3 +297,23 @@ button{cursor:pointer}
 @media(max-width:390px){
   .job-card-footer .job-actions{grid-template-columns:1fr}
 }
+
+
+/* AI agents */
+.career-card{padding:20px;background:linear-gradient(145deg,#fff,#fbf7ff);display:grid;gap:10px}
+.career-card h3{margin:0}.career-card>p{margin:0;color:var(--muted);font-size:12px;line-height:1.55}
+.career-chip-row{display:flex;gap:6px;flex-wrap:wrap}
+.career-actions{display:grid;gap:6px;font-size:11px;color:#5c667a}
+.career-button{justify-self:start;margin-top:2px}
+.career-button:disabled{opacity:.6;cursor:default}
+.ai-explanation{margin:18px 0 0;background:linear-gradient(145deg,#fbf8ff,#fff);border:1px solid #ebe2fa;border-radius:14px;padding:14px;display:grid;gap:11px}
+.ai-explanation-title{display:flex;align-items:center;gap:7px;color:#6547a3}.ai-explanation-title>span{font-size:9px;font-weight:900;letter-spacing:.06em;border:1px solid #dfd1f5;background:#fff;border-radius:999px;padding:3px 6px}
+.ai-explanation p{margin:0;color:#586277;line-height:1.6;font-size:12px}.ai-explanation small{display:block;font-size:10px;font-weight:800;color:#687286;margin-bottom:7px}
+.ai-advice{display:grid;gap:5px;font-size:11px;color:#5e687c}
+.application-pack-modal{width:min(820px,100%)}
+.agent-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-right:42px;flex-wrap:wrap}
+.agent-reviewed{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:800;color:var(--green);background:var(--green-bg);border-radius:999px;padding:5px 8px}
+.application-list,.caution-list{display:grid;gap:7px;border-radius:12px;padding:12px 14px;font-size:12px;line-height:1.5}
+.application-list{background:#fafafd;border:1px solid var(--line);color:#596377}
+.caution-list{background:#fff7f4;border:1px solid #f4ddd3;color:#8c5441}
+@media(max-width:780px){.agent-heading{padding-right:36px}.career-button{width:100%}}
