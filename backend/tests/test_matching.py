@@ -95,3 +95,63 @@ def test_unrelated_role_does_not_get_artificially_high_score() -> None:
 
     assert scored["score"] < 55
     assert scored["verdict"] == "skip"
+
+
+
+def test_displayed_skill_counts_match_scoring_reason() -> None:
+    candidate = profile()
+    candidate.skills = candidate.skills + ["Cursor"]
+    job = Job(
+        source="test",
+        external_id="4",
+        title="AI Software Engineer",
+        company="Example",
+        location="Remote",
+        remote_region="Worldwide",
+        description=(
+            "Build AI applications with Python, FastAPI, PostgreSQL, RAG, "
+            "LangGraph, OpenAI, Docker and Cursor."
+        ),
+        tags=["ai", "python"],
+        salary_min=None,
+        salary_max=None,
+        currency="USD",
+        url="https://example.com/job4",
+    )
+
+    scored = score_job(candidate, job)
+    total = len(scored["matching_skills"]) + len(scored["skill_gaps"])
+
+    assert total > 0
+    assert any(
+        f"You match {len(scored['matching_skills'])} of {total}" in reason
+        for reason in scored["reasons"]
+    )
+
+
+def test_selected_seniority_hard_filters_senior_role() -> None:
+    candidate = profile()
+    candidate.seniority_levels = ["junior", "middle"]
+    job = Job(
+        source="test",
+        external_id="5",
+        title="Senior Python AI Engineer",
+        company="Example",
+        location="Remote",
+        remote_region="Europe",
+        description=(
+            "Python, FastAPI, PostgreSQL, RAG, LangGraph, Docker and OpenAI. "
+            "Remote role requiring 3+ years of experience."
+        ),
+        tags=["python", "ai", "senior"],
+        salary_min=70000,
+        salary_max=90000,
+        currency="USD",
+        url="https://example.com/job5",
+    )
+
+    scored = score_job(candidate, job)
+
+    assert scored["score"] < 45
+    assert scored["verdict"] == "skip"
+    assert any("outside your selected levels" in reason for reason in scored["reasons"])
