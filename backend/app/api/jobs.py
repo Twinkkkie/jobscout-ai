@@ -5,9 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.db import get_db
 from app.deps import get_current_user
-from app.models import CandidateProfile, Job, JobMatch, User
-from app.schemas import JobRead, MatchRead
+from app.models import CandidateProfile, Job, JobMatch, Resume, User
+from app.schemas import JobRead, MatchAnalysisRead, MatchRead
+from app.services.match_ai import explain_match_ai
+from app.services.matching import score_job
 from app.services.orchestrator import rebuild_matches
+from app.services.vacancy_ai import analyze_vacancy_ai
 from app.worker import celery_app, scan_jobs_task
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -97,7 +100,75 @@ async def list_matches(
             skill_gaps=match.skill_gaps,
             reasons=match.reasons,
             verdict=match.verdict,
+            ai_explanation=match.ai_explanation,
             job=JobRead.model_validate(job),
         )
         for match, job in rows
     ]
+
+
+
+@router.post("/{job_id}/match-analysis", response_model=MatchAnalysisRead)
+async def analyze_match(
+    job_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> MatchAnalysisRead:
+    job = await db.get(Job, job_id)
+    if job is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    profile = await db.scalar(
+        select(CandidateProfile).where(CandidateProfile.user_id == user.id)
+    )
+    if profile is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=409, detail="Complete your profile first")
+
+    if not (job.ai_analysis or {}).get("ai_enriched"):
+        job.ai_analysis = await analyze_vacancy_ai(job)
+
+    scored = score_job(profile, job)
+    match = await db.scalar(
+        select(JobMatch).where(
+            JobMatch.user_id == user.id,
+            JobMatch.job_id == job.id,
+        )
+    )
+    if match is None:
+        match = JobMatch(user_id=user.id, job_id=job.id)
+        db.add(match)
+
+    latest_resume = await db.scalar(
+        select(Resume)
+        .where(Resume.user_id == user.id)
+        .order_by(Resume.created_at.desc())
+    )
+    explanation = await explain_match_ai(
+        profile,
+        job,
+        scored,
+        latest_resume.extracted_text if latest_resume else "",
+    )
+
+    match.score = scored["score"]
+    match.matching_skills = scored["matching_skills"]
+    match.skill_gaps = scored["skill_gaps"]
+    match.reasons = scored["reasons"]
+    match.verdict = scored["verdict"]
+    match.ai_explanation = explanation
+    await db.commit()
+    await db.refresh(match)
+
+    read = MatchRead(
+        id=match.id,
+        score=match.score,
+        matching_skills=match.matching_skills,
+        skill_gaps=match.skill_gaps,
+        reasons=match.reasons,
+        verdict=match.verdict,
+        ai_explanation=match.ai_explanation,
+        job=JobRead.model_validate(job),
+    )
+    return MatchAnalysisRead(match=read, explanation=explanation)
