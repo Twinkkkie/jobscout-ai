@@ -8,7 +8,7 @@ from app.deps import get_current_user
 from app.models import CandidateProfile, Job, JobMatch, User
 from app.schemas import JobRead, MatchRead
 from app.services.orchestrator import rebuild_matches
-from app.worker import scan_jobs_task
+from app.worker import celery_app, scan_jobs_task
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -34,6 +34,17 @@ async def list_jobs(
 async def scan_jobs(user: User = Depends(get_current_user)) -> dict:
     task = scan_jobs_task.delay(settings.job_scan_limit, str(user.id))
     return {"status": "queued", "task_id": task.id}
+
+
+@router.get("/scan/{task_id}")
+async def scan_status(task_id: str, user: User = Depends(get_current_user)) -> dict:
+    task = celery_app.AsyncResult(task_id)
+    payload = {"task_id": task_id, "status": task.status.lower()}
+    if task.successful():
+        payload["result"] = task.result
+    elif task.failed():
+        payload["error"] = str(task.result)
+    return payload
 
 
 @router.post("/rematch", status_code=202)
