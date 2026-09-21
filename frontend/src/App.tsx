@@ -76,6 +76,8 @@ type Profile = {
   min_salary_usd: number | null;
   remote_only: boolean;
   exclude_keywords: string[];
+  rematch_queued?: boolean;
+  rematch_task_id?: string | null;
 };
 
 type Stats = {
@@ -257,7 +259,7 @@ function App() {
       const taskId = queued.task_id;
       let completed = false;
 
-      for (let attempt = 0; attempt < 60; attempt += 1) {
+      for (let attempt = 0; attempt < 25; attempt += 1) {
         await new Promise((resolve) => window.setTimeout(resolve, 1000));
         const state = await api(`/jobs/scan/${taskId}`);
 
@@ -306,11 +308,41 @@ function App() {
       }
 
       if (!completed) {
-        throw new Error(
+        setScanNotice(
           locale === "en"
-            ? "The scan is taking longer than expected. Try Refresh in a moment."
-            : "Поиск занимает больше времени, чем ожидалось. Обнови страницу через минуту."
+            ? "Scan is still running in the background. You can keep using JobScout."
+            : "Поиск продолжается в фоне. JobScout можно продолжать использовать."
         );
+
+        void (async () => {
+          for (let attempt = 0; attempt < 120; attempt += 1) {
+            await new Promise(resolve => window.setTimeout(resolve, 1000));
+            try {
+              const state = await api(`/jobs/scan/${taskId}`);
+              if (state.status === "success") {
+                await refresh();
+                const result = state.result || {};
+                const newJobs = Number(result.new_jobs || 0);
+                setScanNotice(
+                  locale === "en"
+                    ? `Scan finished · ${newJobs} new vacancies added`
+                    : `Поиск завершен · добавлено новых вакансий: ${newJobs}`
+                );
+                break;
+              }
+              if (state.status === "failure") {
+                setScanNotice(
+                  locale === "en"
+                    ? "Background scan failed. Try again."
+                    : "Фоновый поиск завершился с ошибкой. Попробуй еще раз."
+                );
+                break;
+              }
+            } catch {
+              break;
+            }
+          }
+        })();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Scan failed");
@@ -562,7 +594,25 @@ function App() {
                   body: JSON.stringify(value),
                 });
                 setProfile(saved);
-                await refresh();
+
+                if (saved.rematch_task_id) {
+                  const taskId = saved.rematch_task_id as string;
+                  void (async () => {
+                    for (let attempt = 0; attempt < 60; attempt += 1) {
+                      await new Promise(resolve => window.setTimeout(resolve, 500));
+                      try {
+                        const state = await api(`/jobs/scan/${taskId}`);
+                        if (state.status === "success") {
+                          await refresh();
+                          break;
+                        }
+                        if (state.status === "failure") break;
+                      } catch {
+                        break;
+                      }
+                    }
+                  })();
+                }
               }}
             />
           )}
@@ -1421,7 +1471,7 @@ function ProfilePage({
         <label>{locale==="en"?"Professional summary":"О себе"}<textarea value={draft.summary} onChange={e=>update({summary:e.target.value})}/></label>
         <div className="profile-save-row">
           <button className={"primary-button profile-save "+(saveState==="saved"?"saved":"")} disabled={saveState==="saving"} onClick={save}>{buttonText}</button>
-          {saveState==="saved"&&<span className="save-success">{locale==="en"?"Profile saved ✓ Matches updated.":"Профиль сохранен ✓ Мэтчи обновлены."}</span>}
+          {saveState==="saved"&&<span className="save-success">{locale==="en"?"Profile saved ✓ Matches are updating in the background.":"Профиль сохранен ✓ Мэтчи обновляются в фоне."}</span>}
           {saveState==="error"&&<span className="save-error">{saveError}</span>}
         </div>
       </section>
