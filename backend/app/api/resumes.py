@@ -10,7 +10,7 @@ from app.db import get_db
 from app.deps import get_current_user
 from app.models import CandidateProfile, Resume, User
 from app.schemas import ResumeRead
-from app.services.orchestrator import rebuild_matches
+from app.worker import rebuild_matches_task
 from app.services.resume_parser import UnsupportedResume, extract_text, infer_profile
 
 router = APIRouter(prefix="/resumes", tags=["resumes"])
@@ -65,8 +65,15 @@ async def upload_resume(
 
     await db.commit()
     await db.refresh(resume)
+
+    # Resume parsing/upload should not fail just because a full match rebuild is
+    # slow or the background worker is temporarily unavailable.
     if profile:
-        await rebuild_matches(db, profile)
+        try:
+            rebuild_matches_task.delay(str(user.id))
+        except Exception:
+            pass
+
     return resume
 
 
