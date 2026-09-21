@@ -127,6 +127,9 @@ class CareerInsightRead(BaseModel):
     target_role_observations: list[str]
     recommended_actions: list[str]
     ai_enriched: bool = False
+    agent: str = "career"
+    engine: str = "sequential_fallback"
+    trace: list[str] = []
 
 
 class MatchAnalysisRead(BaseModel):
