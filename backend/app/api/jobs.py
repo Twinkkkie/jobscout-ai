@@ -12,7 +12,6 @@ from app.schemas import JobRead, MatchAnalysisRead, MatchRead
 from app.services.match_ai import explain_match_ai
 from app.services.matching import score_job
 from app.services.orchestrator import rebuild_matches
-from app.services.vacancy_ai import analyze_vacancy_ai
 from app.worker import analyze_job_match_task, celery_app, scan_jobs_task
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
