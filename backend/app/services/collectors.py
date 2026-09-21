@@ -243,16 +243,34 @@ async def collect_arbeitnow(limit: int = 50) -> list[CollectedJob]:
 
 async def collect_public_jobs(limit: int = 160) -> list[CollectedJob]:
     per_source = max(20, min(50, limit // 5))
-    results = await asyncio.gather(
-        collect_remoteok(per_source),
-        collect_wwr(per_source),
-        collect_himalayas(per_source),
-        collect_jobicy(per_source),
-        collect_arbeitnow(per_source),
-        return_exceptions=True,
-    )
+    tasks = [
+        asyncio.create_task(collect_remoteok(per_source)),
+        asyncio.create_task(collect_wwr(per_source)),
+        asyncio.create_task(collect_himalayas(per_source)),
+        asyncio.create_task(collect_jobicy(per_source)),
+        asyncio.create_task(collect_arbeitnow(per_source)),
+    ]
+
+    # A SaaS scan should not feel blocked by one slow third-party source.
+    # Return the sources that answered within the overall budget and let the
+    # next scan pick up anything a temporarily slow provider missed.
+    done, pending = await asyncio.wait(tasks, timeout=9.0)
+    for task in pending:
+        task.cancel()
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
+
     combined: list[CollectedJob] = []
-    for result in results:
+    for task in done:
+        try:
+            result = task.result()
+        except Exception:
+            continue
         if isinstance(result, list):
             combined.extend(result)
+
+    combined.sort(
+        key=lambda job: job.published_at or datetime.min.replace(tzinfo=UTC),
+        reverse=True,
+    )
     return combined[:limit]
