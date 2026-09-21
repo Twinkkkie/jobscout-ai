@@ -108,8 +108,12 @@ def _role_score(target_roles: list[str], title: str) -> tuple[float, str | None]
     if candidate_families & job_families:
         return 29.0, "The vacancy title is in the same role family as your target roles."
 
-    title_tokens = _tokens(title)
-    target_tokens = _tokens(" ".join(target_roles))
+    generic_role_tokens = {
+        "developer", "engineer", "software", "senior", "junior", "lead",
+        "specialist", "manager", "application", "applications",
+    }
+    title_tokens = _tokens(title) - generic_role_tokens
+    target_tokens = _tokens(" ".join(target_roles)) - generic_role_tokens
     overlap = title_tokens & target_tokens
     if overlap:
         return 20.0, "The vacancy title overlaps with your target-role keywords."
