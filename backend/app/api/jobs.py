@@ -112,6 +112,7 @@ async def list_matches(
 @router.post("/{job_id}/match-analysis", response_model=MatchAnalysisRead)
 async def analyze_match(
     job_id: UUID,
+    queue_ai: bool = Query(default=True),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> MatchAnalysisRead:
@@ -156,7 +157,7 @@ async def analyze_match(
     await db.refresh(match)
 
     task_id = None
-    if settings.openai_api_key and not has_current_ai:
+    if queue_ai and settings.openai_api_key and not has_current_ai:
         task = analyze_job_match_task.delay(str(user.id), str(job.id))
         task_id = task.id
 
