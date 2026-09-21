@@ -135,3 +135,5 @@ class CareerInsightRead(BaseModel):
 class MatchAnalysisRead(BaseModel):
     match: MatchRead
     explanation: dict
+    ai_pending: bool = False
+    task_id: str | None = None
