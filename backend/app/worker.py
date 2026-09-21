@@ -9,11 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.agents.job_scout import run_job_scout_agent
 from app.core.config import settings
-from app.models import CandidateProfile, Job, JobMatch
+from app.models import CandidateProfile, Job, JobMatch, Resume
 from app.services.availability import verify_job_availability
 from app.services.match_ai import explain_match_ai
 from app.services.matching import score_job
 from app.services.orchestrator import rebuild_matches, sync_jobs
+from app.services.resume_ai import analyze_resume_ai
 from app.services.vacancy_ai import analyze_vacancy_ai, analyze_vacancies_batch_ai
 
 celery_app = Celery("jobscout", broker=settings.redis_url, backend=settings.redis_url)
@@ -172,6 +173,40 @@ async def _analyze_job_match(user_id: str, job_id: str) -> dict:
         }
 
 
+async def _enrich_resume(user_id: str, resume_id: str) -> dict:
+    async with _worker_db() as db:
+        profile = await db.scalar(
+            select(CandidateProfile).where(CandidateProfile.user_id == UUID(user_id))
+        )
+        resume = await db.get(Resume, UUID(resume_id))
+        if profile is None or resume is None:
+            return {"updated": False}
+
+        base = resume.extracted_profile or {}
+        enriched = await analyze_resume_ai(resume.extracted_text, base)
+        resume.extracted_profile = enriched
+
+        if enriched.get("skills"):
+            profile.skills = sorted(set((profile.skills or []) + enriched["skills"]))
+        if enriched.get("target_roles") and not profile.target_roles:
+            profile.target_roles = enriched["target_roles"]
+        if enriched.get("years_experience", 0) > profile.years_experience:
+            profile.years_experience = enriched["years_experience"]
+        if not profile.summary and enriched.get("summary"):
+            profile.summary = enriched["summary"]
+
+        profile.ai_profile = enriched
+        profile.ai_profile_updated_at = datetime.now(UTC)
+        await db.commit()
+
+        matched = await rebuild_matches(db, profile)
+        return {
+            "updated": True,
+            "ai_enriched": bool(enriched.get("ai_enriched")),
+            "matched": matched,
+        }
+
+
 async def _scan_all(limit: int) -> dict:
     async with _worker_db() as db:
         new_jobs = await sync_jobs(db, limit)
@@ -239,6 +274,11 @@ def scan_jobs_task(limit: int = 100, user_id: str | None = None) -> dict:
         result["ai_enrichment_queued"] = False
         result["ai_task_id"] = None
     return result
+
+
+@celery_app.task
+def enrich_resume_task(user_id: str, resume_id: str) -> dict:
+    return asyncio.run(_enrich_resume(user_id, resume_id))
 
 
 @celery_app.task
