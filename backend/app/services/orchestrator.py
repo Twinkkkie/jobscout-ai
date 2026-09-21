@@ -36,13 +36,15 @@ async def sync_jobs(db: AsyncSession, limit: int = 100) -> int:
     return saved
 
 
-async def rebuild_matches(db: AsyncSession, profile: CandidateProfile, limit: int = 250) -> int:
-    result = await db.execute(
+async def rebuild_matches(db: AsyncSession, profile: CandidateProfile, limit: int | None = None) -> int:
+    query = (
         select(Job)
         .where(Job.is_active.is_(True))
         .order_by(Job.collected_at.desc())
-        .limit(limit)
     )
+    if limit is not None:
+        query = query.limit(limit)
+    result = await db.execute(query)
     jobs = list(result.scalars().all())
     if not jobs:
         return 0
