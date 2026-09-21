@@ -71,6 +71,10 @@ class JobRead(BaseModel):
     currency: str
     url: str
     published_at: datetime | None
+    collected_at: datetime
+    last_checked_at: datetime | None
+    is_active: bool
+    closed_at: datetime | None
 
 
 class MatchRead(BaseModel):
