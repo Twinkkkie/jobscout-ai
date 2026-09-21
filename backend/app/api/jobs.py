@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -110,7 +112,7 @@ async def list_matches(
 
 @router.post("/{job_id}/match-analysis", response_model=MatchAnalysisRead)
 async def analyze_match(
-    job_id: str,
+    job_id: UUID,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> MatchAnalysisRead:
