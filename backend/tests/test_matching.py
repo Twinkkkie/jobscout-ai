@@ -155,3 +155,40 @@ def test_selected_seniority_hard_filters_senior_role() -> None:
     assert scored["score"] < 45
     assert scored["verdict"] == "skip"
     assert any("outside your selected levels" in reason for reason in scored["reasons"])
+
+
+
+def test_web_php_role_exposes_missing_ecommerce_stack() -> None:
+    candidate = profile()
+    candidate.skills = candidate.skills + ["JavaScript", "PHP", "React"]
+    job = Job(
+        source="test",
+        external_id="6",
+        title=(
+            "Web-Entwickler:in E-Commerce PHP / Laravel / JavaScript "
+            "(Shopify, PlentyONE) - Vollzeit (m/w/d) in Dortmund"
+        ),
+        company="apio GmbH",
+        location="Dortmund",
+        remote_region="",
+        description=(
+            "Develop e-commerce applications with PHP, Laravel, JavaScript, React, "
+            "Shopify and PlentyONE."
+        ),
+        tags=["php", "javascript", "e-commerce"],
+        salary_min=None,
+        salary_max=None,
+        currency="EUR",
+        url="https://example.com/job6",
+    )
+
+    scored = score_job(candidate, job)
+
+    assert "JavaScript" in scored["matching_skills"]
+    assert "PHP" in scored["matching_skills"]
+    assert "Laravel" in scored["skill_gaps"]
+    assert "Shopify" in scored["skill_gaps"]
+    assert "PlentyONE" in scored["skill_gaps"]
+    assert scored["score"] < 45
+    assert scored["verdict"] == "skip"
+    assert any("role family is outside" in reason for reason in scored["reasons"])
