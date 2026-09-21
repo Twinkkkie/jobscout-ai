@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.db import get_db
 from app.deps import get_current_user
-from app.models import CandidateProfile, Job, JobMatch, Resume, User
+from app.models import CandidateProfile, Job, JobMatch, User
 from app.schemas import JobRead, MatchAnalysisRead, MatchRead
 from app.services.match_ai import explain_match_ai
 from app.services.matching import score_job
@@ -142,16 +142,10 @@ async def analyze_match(
         match = JobMatch(user_id=user.id, job_id=job.id)
         db.add(match)
 
-    latest_resume = await db.scalar(
-        select(Resume)
-        .where(Resume.user_id == user.id)
-        .order_by(Resume.created_at.desc())
-    )
     explanation = await explain_match_ai(
         profile,
         job,
         scored,
-        latest_resume.extracted_text if latest_resume else "",
     )
 
     match.score = scored["score"]
