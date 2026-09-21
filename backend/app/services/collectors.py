@@ -205,13 +205,50 @@ async def collect_jobicy(limit: int = 50) -> list[CollectedJob]:
     return jobs[:limit]
 
 
+async def collect_arbeitnow(limit: int = 50) -> list[CollectedJob]:
+    """Collect fresh Europe/Germany jobs from Arbeitnow's public job-board API."""
+    async with httpx.AsyncClient(timeout=25, follow_redirects=True) as client:
+        response = await client.get("https://www.arbeitnow.com/api/job-board-api")
+        response.raise_for_status()
+        payload = response.json()
+
+    jobs: list[CollectedJob] = []
+    for item in payload.get("data", [])[:limit]:
+        slug = str(item.get("slug") or "")
+        url = item.get("url") or (
+            f"https://www.arbeitnow.com/jobs/{slug}" if slug else "https://www.arbeitnow.com"
+        )
+        created_at = item.get("created_at")
+        published_at = _parse_date(created_at)
+        tags = list(item.get("tags") or []) + list(item.get("job_types") or [])
+        jobs.append(
+            CollectedJob(
+                source="Arbeitnow",
+                external_id=slug or url,
+                title=item.get("title", ""),
+                company=item.get("company_name", ""),
+                location=item.get("location", "") or ("Remote" if item.get("remote") else ""),
+                remote_region="Remote" if item.get("remote") else item.get("location", ""),
+                description=_clean_html(item.get("description", "")),
+                tags=tags,
+                salary_min=None,
+                salary_max=None,
+                currency="EUR",
+                url=url,
+                published_at=published_at,
+            )
+        )
+    return jobs
+
+
 async def collect_public_jobs(limit: int = 160) -> list[CollectedJob]:
-    per_source = max(20, min(50, limit // 4))
+    per_source = max(20, min(50, limit // 5))
     results = await asyncio.gather(
         collect_remoteok(per_source),
         collect_wwr(per_source),
         collect_himalayas(per_source),
         collect_jobicy(per_source),
+        collect_arbeitnow(per_source),
         return_exceptions=True,
     )
     combined: list[CollectedJob] = []
