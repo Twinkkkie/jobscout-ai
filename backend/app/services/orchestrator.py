@@ -1,3 +1,4 @@
+import hashlib
 from datetime import UTC, datetime
 from html import unescape
 
@@ -6,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import CandidateProfile, Job, JobMatch
 from app.services.collectors import collect_public_jobs
-from app.services.matching import score_job
+from app.services.matching import MATCHING_VERSION, score_job
 
 
 def _decode_job_item(item):
@@ -14,6 +15,14 @@ def _decode_job_item(item):
         value = getattr(item, field, "")
         if isinstance(value, str):
             setattr(item, field, unescape(value))
+
+    # Some RSS/API providers use very long URLs as external IDs. Keep the
+    # uniqueness stable without ever depending on a VARCHAR-sized identifier.
+    external_id = unescape(str(getattr(item, "external_id", "") or "")).strip()
+    if len(external_id) > 240:
+        external_id = "sha256:" + hashlib.sha256(external_id.encode("utf-8")).hexdigest()
+    item.external_id = external_id
+
     item.tags = [unescape(str(tag)) for tag in (item.tags or [])]
     return item
 
@@ -93,6 +102,32 @@ async def rebuild_matches(db: AsyncSession, profile: CandidateProfile, limit: in
         match.verdict = scored["verdict"]
         # Explanations are generated on demand from the current score/requirements.
         match.ai_explanation = {}
+        match.matching_version = MATCHING_VERSION
 
     await db.commit()
     return len(jobs)
+
+
+
+async def ensure_current_matches(
+    db: AsyncSession,
+    profile: CandidateProfile,
+) -> bool:
+    """
+    Recalculate persisted matches only when they were produced by an older
+    matching algorithm. This clears stale skills/gaps after matcher upgrades
+    without making every normal page load expensive.
+    """
+    stale = await db.scalar(
+        select(JobMatch.id)
+        .where(
+            JobMatch.user_id == profile.user_id,
+            JobMatch.matching_version != MATCHING_VERSION,
+        )
+        .limit(1)
+    )
+    if stale is None:
+        return False
+
+    await rebuild_matches(db, profile)
+    return True
