@@ -98,6 +98,7 @@ class JobMatch(Base):
     verdict: Mapped[str] = mapped_column(String(32), default="maybe")
     ai_explanation: Mapped[dict] = mapped_column(JSONB, default=dict)
     matching_version: Mapped[int] = mapped_column(Integer(), default=0)
+    is_final: Mapped[bool] = mapped_column(Boolean(), default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
