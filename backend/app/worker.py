@@ -96,7 +96,7 @@ async def _enrich_user_jobs(user_id: str) -> dict:
         candidates = [
             job
             for job in recent_jobs
-            if not ((job.ai_analysis or {}).get("ai_enriched") and (job.ai_analysis or {}).get("analysis_version") == 3)
+            if not ((job.ai_analysis or {}).get("ai_enriched") and (job.ai_analysis or {}).get("analysis_version") == 4)
             and score_job(profile, job)["score"] >= 40
         ]
         candidates.sort(
@@ -170,7 +170,7 @@ async def _analyze_job_match(user_id: str, job_id: str, locale: str = "en") -> d
             "score": match.score,
             "ai_enriched": bool(
                 (job.ai_analysis or {}).get("ai_enriched")
-                and (job.ai_analysis or {}).get("analysis_version") == 3
+                and (job.ai_analysis or {}).get("analysis_version") == 4
             ),
         }
 
@@ -288,7 +288,7 @@ async def _scan_all(limit: int) -> dict:
             candidates = [
                 job
                 for job in recent_jobs
-                if not ((job.ai_analysis or {}).get("ai_enriched") and (job.ai_analysis or {}).get("analysis_version") == 3)
+                if not ((job.ai_analysis or {}).get("ai_enriched") and (job.ai_analysis or {}).get("analysis_version") == 4)
             ][:20]
 
             # Two compact batch calls are much faster than one request per job.
