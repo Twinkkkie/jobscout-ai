@@ -24,6 +24,7 @@ async def stats(
         .where(
             JobMatch.user_id == user.id,
             JobMatch.score >= 75,
+            JobMatch.is_final.is_(True),
             Job.is_active.is_(True),
         )
     ) or 0
