@@ -89,27 +89,36 @@ async def _enrich_user_jobs(user_id: str) -> dict:
             select(Job)
             .where(Job.is_active.is_(True))
             .order_by(Job.collected_at.desc())
-            .limit(60)
+            .limit(180)
         )
         recent_jobs = list(result.scalars().all())
 
         candidates = [
             job
             for job in recent_jobs
-            if not ((job.ai_analysis or {}).get("ai_enriched") and (job.ai_analysis or {}).get("analysis_version") == 4)
-            and score_job(profile, job)["score"] >= 40
+            if not (
+                (job.ai_analysis or {}).get("ai_enriched")
+                and (job.ai_analysis or {}).get("analysis_version") == 4
+            )
+            and score_job(profile, job)["score"] >= 35
         ]
         candidates.sort(
             key=lambda job: score_job(profile, job)["score"],
             reverse=True,
         )
-        candidates = candidates[:20]
+        candidates = candidates[:50]
 
         enriched = 0
         now = datetime.now(UTC)
-        for start in range(0, len(candidates), 10):
-            batch = candidates[start : start + 10]
-            analyses = await analyze_vacancies_batch_ai(batch)
+        batches = [candidates[start : start + 10] for start in range(0, len(candidates), 10)]
+        semaphore = asyncio.Semaphore(3)
+
+        async def analyze_batch(batch: list[Job]) -> tuple[list[Job], dict[str, dict]]:
+            async with semaphore:
+                return batch, await analyze_vacancies_batch_ai(batch)
+
+        results = await asyncio.gather(*(analyze_batch(batch) for batch in batches))
+        for batch, analyses in results:
             for job in batch:
                 analysis = analyses.get(str(job.id))
                 if not analysis:
@@ -163,6 +172,10 @@ async def _analyze_job_match(user_id: str, job_id: str, locale: str = "en") -> d
         match.verdict = scored["verdict"]
         match.ai_explanation = await explain_match_ai(profile, job, scored, locale=locale)
         match.matching_version = MATCHING_VERSION
+        match.is_final = bool(
+            (job.ai_analysis or {}).get("ai_enriched")
+            and (job.ai_analysis or {}).get("analysis_version") == 4
+        ) if settings.openai_api_key else True
 
         await db.commit()
         return {
