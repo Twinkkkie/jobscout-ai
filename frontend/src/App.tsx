@@ -1201,6 +1201,31 @@ function JobsPage({
                   {visibleTags.map((tag,index)=><span className="tag" key={`${tag}-${index}`}>{decodeHtmlEntities(String(tag))}</span>)}
                   {hiddenTags>0&&<span className="tag tag-more">+{hiddenTags}</span>}
                 </div>
+
+                {match&&(
+                  <div className="job-match-preview">
+                    <div className="job-match-preview-head">
+                      <span className="job-finalized-label">{locale==="en"?"Analyzed match":"Мэтч рассчитан"}</span>
+                      <strong>{Math.round(match.score)}%</strong>
+                    </div>
+                    <div className="job-match-preview-row">
+                      <span className="job-match-preview-label">✓ {locale==="en"?"Match":"Совпадает"}</span>
+                      <div className="job-match-preview-chips">
+                        {match.matching_skills.slice(0,3).map(skill=><span className="tag positive" key={skill}>{skill}</span>)}
+                        {match.matching_skills.length>3&&<span className="tag tag-more">+{match.matching_skills.length-3}</span>}
+                        {!match.matching_skills.length&&<span className="job-match-empty">{locale==="en"?"No explicit technical matches":"Нет явных технических совпадений"}</span>}
+                      </div>
+                    </div>
+                    <div className="job-match-preview-row">
+                      <span className="job-match-preview-label">! {locale==="en"?"Gaps":"Пробелы"}</span>
+                      <div className="job-match-preview-chips">
+                        {match.skill_gaps.slice(0,2).map(skill=><span className="tag gap" key={skill}>{skill}</span>)}
+                        {match.skill_gaps.length>2&&<span className="tag tag-more">+{match.skill_gaps.length-2}</span>}
+                        {!match.skill_gaps.length&&<span className="job-match-empty">{locale==="en"?"No explicit gaps":"Явных пробелов нет"}</span>}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="job-card-footer">
@@ -1211,13 +1236,13 @@ function JobsPage({
                       className="soft-button match-check-button"
                       onClick={()=>analyzeMatch(job.id)}
                       disabled={analyzingId===job.id}
-                      title={locale==="en"?"Run AI match analysis":"Запустить AI-анализ мэтча"}
+                      title={locale==="en"?"Open match details":"Открыть детали мэтча"}
                     >
                       <Target size={15}/>
                       <span className="match-check-label">
                         {analyzingId===job.id
-                          ? (locale==="en"?"Analyzing…":"AI-анализ…")
-                          : (locale==="en"?"Match":"Мэтч")}
+                          ? (locale==="en"?"Opening…":"Открываем…")
+                          : (locale==="en"?"Match details":"Детали мэтча")}
                       </span>
                       <span className="match-score-badge">{Math.round(match.score)}%</span>
                     </button>
