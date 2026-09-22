@@ -133,7 +133,7 @@ async def analyze_match(
 
     has_current_ai = bool(
         (job.ai_analysis or {}).get("ai_enriched")
-        and (job.ai_analysis or {}).get("analysis_version") == 3
+        and (job.ai_analysis or {}).get("analysis_version") == 4
     )
 
     # Always return an immediate, internally consistent match. If this vacancy
