@@ -2,7 +2,7 @@ import re
 
 from app.models import CandidateProfile, Job
 
-MATCHING_VERSION = 5
+MATCHING_VERSION = 6
 
 STOPWORDS = {
     "and", "the", "with", "for", "you", "your", "our", "are", "will", "from",
@@ -210,6 +210,24 @@ ROLE_FAMILIES: dict[str, list[str]] = {
         "ecommerce developer",
     ],
 }
+
+NON_TECH_ROLE_MARKERS = (
+    "chief commercial officer", "cco", "chief revenue officer", "cro",
+    "chief marketing officer", "cmo", "chief sales officer",
+    "commercial director", "commercial manager", "sales director",
+    "sales manager", "account executive", "account manager",
+    "business development", "partnership manager", "partnerships manager",
+    "marketing manager", "marketing director", "growth manager",
+    "recruiter", "talent acquisition", "human resources", "hr manager",
+    "customer success", "customer support", "operations manager",
+)
+
+TECH_ROLE_MARKERS = (
+    "developer", "engineer", "software", "backend", "frontend", "full stack",
+    "full-stack", "python", "machine learning", "ml engineer", "data engineer",
+    "ai engineer", "ai developer", "llm", "rag engineer", "architect",
+    "devops", "sre", "programmer",
+)
 
 GENERIC_TAGS = {
     "remote", "engineering", "software", "developer", "development", "programming",
@@ -513,6 +531,27 @@ def _ai_requirement_sets(
     )
 
 
+def _primary_role_title(title: str) -> str:
+    value = (title or "").strip()
+    # Providers often append company/domain context after a separator, e.g.
+    # "Chief Commercial Officer (CCO) | AI Product Company".
+    for separator in (" | ", " @ ", " at "):
+        if separator in value:
+            value = value.split(separator, 1)[0].strip()
+    return value
+
+
+def _is_nontechnical_target_title(title: str, target_roles: list[str]) -> bool:
+    primary = _primary_role_title(title).lower()
+    targets = " ".join(target_roles or []).lower()
+
+    has_nontech_marker = any(marker in primary for marker in NON_TECH_ROLE_MARKERS)
+    target_is_technical = any(marker in targets for marker in TECH_ROLE_MARKERS)
+    primary_is_technical = any(marker in primary for marker in TECH_ROLE_MARKERS)
+
+    return has_nontech_marker and target_is_technical and not primary_is_technical
+
+
 def _role_families_for_text(value: str) -> set[str]:
     value_lower = value.lower()
     families = {
@@ -555,7 +594,7 @@ def _role_families_for_text(value: str) -> set[str]:
 
 
 def _role_score(target_roles: list[str], title: str) -> tuple[float, str | None]:
-    title_lower = title.lower()
+    title_lower = _primary_role_title(title).lower()
     targets = [role.lower() for role in target_roles if role]
 
     if any(target in title_lower for target in targets):
@@ -657,10 +696,12 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
 
     role_points, role_reason = _role_score(profile.target_roles or [], job.title)
     candidate_role_families = _role_families_for_text(" ".join(profile.target_roles or []))
-    job_role_families = _role_families_for_text(job.title)
+    primary_title = _primary_role_title(job.title)
+    job_role_families = _role_families_for_text(primary_title)
+    nontechnical_title = _is_nontechnical_target_title(job.title, profile.target_roles or [])
 
     ai_role_family = str(active_ai_analysis.get("role_family") or "").lower()
-    if ai_role_family and ai_role_family != "other":
+    if ai_role_family and ai_role_family != "other" and not nontechnical_title:
         job_role_families.add(ai_role_family)
         if ai_role_family in candidate_role_families:
             role_points = max(role_points, 33.0 if ai_role_family == "ai" else 29.0)
@@ -752,7 +793,6 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
                 f"You match {len(matching)} of {detected_requirement_count} detected technical requirements."
             )
     else:
-        score += 20.0
         reasons.append(
             "The source provides too few explicit technical requirements for a complete gap analysis."
         )
@@ -808,6 +848,17 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
     # Example: Junior + Middle must not surface Senior / Staff / Principal roles.
     if seniority_mismatch:
         score = min(score, 39.0)
+
+    # A commercial/sales/marketing title must not become an AI engineering match
+    # merely because the company or title suffix contains "AI".
+    if nontechnical_title:
+        score = min(score, 25.0)
+        reasons.append("The vacancy title is a non-technical commercial/business role.")
+
+    # With no explicit technical requirements we do not have enough evidence for
+    # a high-confidence match, even when the title itself looks relevant.
+    if detected_requirement_count == 0:
+        score = min(score, 64.0)
 
     score = max(0.0, min(100.0, round(score, 1)))
     verdict = "apply" if score >= 75 else "maybe" if score >= 55 else "skip"
