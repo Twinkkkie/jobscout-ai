@@ -5,6 +5,7 @@ from html import unescape
 from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models import CandidateProfile, Job, JobMatch
 from app.services.collectors import collect_public_jobs
 from app.services.matching import MATCHING_VERSION, score_job
@@ -103,6 +104,11 @@ async def rebuild_matches(db: AsyncSession, profile: CandidateProfile, limit: in
         # Explanations are generated on demand from the current score/requirements.
         match.ai_explanation = {}
         match.matching_version = MATCHING_VERSION
+        has_current_ai = bool(
+            (job.ai_analysis or {}).get("ai_enriched")
+            and (job.ai_analysis or {}).get("analysis_version") == 4
+        )
+        match.is_final = has_current_ai if settings.openai_api_key else True
 
     await db.commit()
     return len(jobs)
@@ -122,7 +128,7 @@ async def ensure_current_matches(
         select(JobMatch.id)
         .where(
             JobMatch.user_id == profile.user_id,
-            JobMatch.matching_version != MATCHING_VERSION,
+            (JobMatch.matching_version != MATCHING_VERSION) | (JobMatch.is_final.is_(False)),
         )
         .limit(1)
     )
