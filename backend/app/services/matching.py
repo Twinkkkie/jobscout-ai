@@ -329,7 +329,101 @@ def _unknown_profile_matches(skills: list[str], job_text: str) -> list[str]:
     return list(dict.fromkeys(matched))
 
 
-def _match_requirement_to_profile(requirement: str, skills: list[str]) -> str | None:
+def _flatten_profile_evidence(value) -> list[str]:
+    result: list[str] = []
+    if isinstance(value, str):
+        text = value.strip()
+        if text:
+            result.append(text)
+    elif isinstance(value, list):
+        for item in value:
+            result.extend(_flatten_profile_evidence(item))
+    elif isinstance(value, dict):
+        for item in value.values():
+            result.extend(_flatten_profile_evidence(item))
+    return result
+
+
+def _effective_profile_skills(profile: CandidateProfile) -> list[str]:
+    values = [str(skill).strip() for skill in (profile.skills or []) if str(skill).strip()]
+    ai_profile = profile.ai_profile or {}
+
+    for skill in ai_profile.get("skills", []) or []:
+        text = str(skill).strip()
+        if text:
+            values.append(text)
+
+    for item in ai_profile.get("skill_evidence", []) or []:
+        if isinstance(item, dict):
+            text = str(item.get("skill") or "").strip()
+            if text:
+                values.append(text)
+
+    return list(dict.fromkeys(values))
+
+
+def _profile_evidence_text(profile: CandidateProfile, skills: list[str]) -> str:
+    parts = [
+        *skills,
+        profile.headline or "",
+        profile.summary or "",
+        *(profile.target_roles or []),
+        *_flatten_profile_evidence(profile.ai_profile or {}),
+    ]
+    return " | ".join(str(part) for part in parts if str(part).strip()).lower()
+
+
+def _broad_capability_match(requirement: str, evidence_text: str) -> str | None:
+    req = requirement.lower().strip()
+
+    if "software engineering" in req or "software development" in req:
+        markers = (
+            "software engineer", "software developer", "software development",
+            "python developer", "backend developer", "application developer",
+        )
+        if any(marker in evidence_text for marker in markers):
+            return requirement
+
+    if (
+        "artificial intelligence" in req
+        or req in {"ai", "ai development", "ai engineering"}
+    ):
+        markers = (
+            "ai developer", "ai application", "ai automation", "llm", "rag",
+            "langgraph", "ai agents", "openai", "generative ai", "genai",
+        )
+        if any(marker in evidence_text for marker in markers):
+            return requirement
+
+    if (
+        ("testing" in req or "evaluat" in req or "adopt" in req)
+        and ("ai tool" in req or "ai model" in req or "models" in req)
+    ):
+        markers = (
+            "cursor", "codex", "chatgpt", "openai", "langgraph", "rag",
+            "llm", "ai agents", "prompt engineering", "model evaluation",
+            "ai-assisted", "ai assisted",
+        )
+        if sum(1 for marker in markers if marker in evidence_text) >= 2:
+            return requirement
+
+    if "open-source" in req or "open source" in req:
+        if "ai" in req or "model" in req:
+            markers = (
+                "hugging face", "huggingface", "ollama", "llama", "mistral",
+                "vllm", "open-source ai", "open source ai",
+            )
+            if any(marker in evidence_text for marker in markers):
+                return requirement
+
+    return None
+
+
+def _match_requirement_to_profile(
+    requirement: str,
+    skills: list[str],
+    evidence_text: str = "",
+) -> str | None:
     requirement = requirement.strip()
     if not requirement:
         return None
@@ -354,6 +448,10 @@ def _match_requirement_to_profile(requirement: str, skills: list[str]) -> str | 
         overlap = req_tokens & skill_tokens
         if overlap and (len(overlap) >= 2 or any(len(token) >= 5 for token in overlap)):
             return skill
+    broad_match = _broad_capability_match(requirement, evidence_text)
+    if broad_match:
+        return broad_match
+
     return None
 
 
@@ -375,7 +473,11 @@ def _unique_requirements(values: list[str]) -> list[str]:
     return result
 
 
-def _ai_requirement_sets(job: Job, skills: list[str]) -> tuple[list[str], list[str], list[str], list[str]]:
+def _ai_requirement_sets(
+    job: Job,
+    skills: list[str],
+    evidence_text: str = "",
+) -> tuple[list[str], list[str], list[str], list[str]]:
     analysis = job.ai_analysis or {}
     if not analysis.get("ai_enriched") or analysis.get("analysis_version") != 4:
         return [], [], [], []
@@ -388,14 +490,14 @@ def _ai_requirement_sets(job: Job, skills: list[str]) -> tuple[list[str], list[s
     missing_nice: list[str] = []
 
     for requirement in must:
-        matched = _match_requirement_to_profile(requirement, skills)
+        matched = _match_requirement_to_profile(requirement, skills, evidence_text)
         if matched:
             matched_must.append(matched)
         else:
             missing_must.append(requirement)
 
     for requirement in nice:
-        matched = _match_requirement_to_profile(requirement, skills)
+        matched = _match_requirement_to_profile(requirement, skills, evidence_text)
         if matched:
             matched_nice.append(matched)
         else:
@@ -506,13 +608,18 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
         [job.title, job.description, " ".join(job.tags or []), job.location, job.remote_region]
     ).lower()
 
-    skills = [skill for skill in (profile.skills or []) if skill]
+    skills = _effective_profile_skills(profile)
+    evidence_text = _profile_evidence_text(profile, skills)
     active_ai_analysis = job.ai_analysis if ((job.ai_analysis or {}).get("ai_enriched") and (job.ai_analysis or {}).get("analysis_version") == 4) else {}
     candidate_keys = _candidate_skill_keys(skills)
     required_keys = _job_skill_keys(job_text)
     matched_keys = candidate_keys & required_keys
 
-    ai_matching, ai_gaps, ai_matched_must, ai_missing_must = _ai_requirement_sets(job, skills)
+    ai_matching, ai_gaps, ai_matched_must, ai_missing_must = _ai_requirement_sets(
+        job,
+        skills,
+        evidence_text,
+    )
 
     deterministic_matching = [
         _display_label_for_requirement(key, skills)
@@ -594,8 +701,8 @@ def score_job(profile: CandidateProfile, job: Job) -> dict:
             must = [str(item).strip() for item in (analysis.get("must_have_skills", []) or []) if str(item).strip()]
             nice = [str(item).strip() for item in (analysis.get("nice_to_have_skills", []) or []) if str(item).strip()]
 
-            matched_must_count = sum(1 for requirement in must if _match_requirement_to_profile(requirement, skills))
-            matched_nice_count = sum(1 for requirement in nice if _match_requirement_to_profile(requirement, skills))
+            matched_must_count = sum(1 for requirement in must if _match_requirement_to_profile(requirement, skills, evidence_text))
+            matched_nice_count = sum(1 for requirement in nice if _match_requirement_to_profile(requirement, skills, evidence_text))
 
             ai_requirement_keys = {
                 _requirement_key(requirement)
