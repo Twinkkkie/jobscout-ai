@@ -10,8 +10,8 @@ from app.deps import get_current_user
 from app.models import CandidateProfile, Job, JobMatch, User
 from app.schemas import JobRead, MatchAnalysisRead, MatchRead
 from app.services.match_ai import explain_match_ai
-from app.services.matching import score_job
-from app.services.orchestrator import rebuild_matches
+from app.services.matching import MATCHING_VERSION, score_job
+from app.services.orchestrator import ensure_current_matches, rebuild_matches
 from app.worker import analyze_job_match_task, celery_app, scan_jobs_task
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -24,6 +24,12 @@ async def list_jobs(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> list[Job]:
+    profile = await db.scalar(
+        select(CandidateProfile).where(CandidateProfile.user_id == user.id)
+    )
+    if profile is not None:
+        await ensure_current_matches(db, profile)
+
     query = (
         select(Job)
         .join(JobMatch, JobMatch.job_id == Job.id)
@@ -82,6 +88,12 @@ async def list_matches(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> list[MatchRead]:
+    profile = await db.scalar(
+        select(CandidateProfile).where(CandidateProfile.user_id == user.id)
+    )
+    if profile is not None:
+        await ensure_current_matches(db, profile)
+
     query = (
         select(JobMatch, Job)
         .join(Job, Job.id == JobMatch.job_id)
@@ -156,6 +168,7 @@ async def analyze_match(
     match.reasons = scored["reasons"]
     match.verdict = scored["verdict"]
     match.ai_explanation = explanation
+    match.matching_version = MATCHING_VERSION
     await db.commit()
     await db.refresh(match)
 
