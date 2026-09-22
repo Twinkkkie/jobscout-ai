@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.models import Application, CandidateProfile, Job, JobMatch, Resume
 from app.services.availability import verify_job_availability
 from app.services.match_ai import explain_match_ai
-from app.services.matching import score_job
+from app.services.matching import MATCHING_VERSION, score_job
 from app.services.orchestrator import rebuild_matches, sync_jobs
 from app.services.resume_ai import analyze_resume_ai
 from app.services.vacancy_ai import analyze_vacancy_ai, analyze_vacancies_batch_ai
@@ -162,6 +162,7 @@ async def _analyze_job_match(user_id: str, job_id: str, locale: str = "en") -> d
         match.reasons = scored["reasons"]
         match.verdict = scored["verdict"]
         match.ai_explanation = await explain_match_ai(profile, job, scored, locale=locale)
+        match.matching_version = MATCHING_VERSION
 
         await db.commit()
         return {
