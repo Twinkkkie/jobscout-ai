@@ -295,3 +295,64 @@ def test_ai_seniority_is_a_hard_constraint_even_when_title_is_ambiguous() -> Non
     assert scored["score"] < 45
     assert scored["verdict"] == "skip"
     assert any("outside your selected levels" in reason for reason in scored["reasons"])
+
+
+
+def test_broad_ai_capabilities_use_full_candidate_evidence() -> None:
+    candidate = profile()
+    candidate.summary = (
+        "AI-focused Python software developer building LLM, RAG and agentic applications "
+        "and using AI-assisted development tools in day-to-day engineering."
+    )
+    candidate.ai_profile = {
+        "skills": ["Prompt Engineering", "Llama", "Ollama"],
+        "experience_signals": [
+            "Uses Cursor, Codex and ChatGPT to test and adopt new AI tools in development."
+        ],
+        "skill_evidence": [
+            {
+                "skill": "Prompt Engineering",
+                "evidence_level": "project",
+                "evidence": "Designed prompts and structured outputs for AI applications.",
+            }
+        ],
+    }
+    job = Job(
+        source="test",
+        external_id="10",
+        title="AI Software Engineer",
+        company="Example",
+        location="Remote",
+        remote_region="Worldwide",
+        description="Build and test AI-powered software products.",
+        tags=["ai", "software engineering"],
+        salary_min=None,
+        salary_max=None,
+        currency="USD",
+        url="https://example.com/job10",
+        ai_analysis={
+            "ai_enriched": True,
+            "analysis_version": 4,
+            "role_family": "ai",
+            "seniority": "middle",
+            "must_have_skills": [
+                "Software engineering",
+                "Artificial intelligence",
+                "Open-source AI tools and models",
+                "Testing and adopting new AI tools and models",
+                "Prompt engineering",
+            ],
+            "nice_to_have_skills": [],
+            "years_required": 3,
+        },
+    )
+
+    scored = score_job(candidate, job)
+
+    gap_keys = {gap.lower() for gap in scored["skill_gaps"]}
+    assert "software engineering" not in gap_keys
+    assert "artificial intelligence" not in gap_keys
+    assert "open-source ai tools and models" not in gap_keys
+    assert "testing and adopting new ai tools and models" not in gap_keys
+    assert "prompt engineering" not in gap_keys
+    assert any(skill.lower() == "prompt engineering" for skill in scored["matching_skills"])
