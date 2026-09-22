@@ -374,3 +374,55 @@ button{cursor:pointer}
   max-width:410px;
 }
 @keyframes jobscout-spin{to{transform:rotate(360deg)}}
+
+
+/* Finalized match preview inside Jobs cards */
+.job-match-preview{
+  margin-top:14px;
+  padding:12px;
+  border:1px solid #eee7f5;
+  background:#fcfbfe;
+  border-radius:14px;
+  display:grid;
+  gap:10px;
+}
+.job-match-preview-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.job-finalized-label{
+  font-size:10px;
+  font-weight:850;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:#756382;
+}
+.job-match-preview-head strong{
+  font-size:18px;
+  color:#2a2132;
+}
+.job-match-preview-row{
+  display:grid;
+  gap:6px;
+}
+.job-match-preview-label{
+  font-size:10px;
+  font-weight:800;
+  color:#6a6172;
+}
+.job-match-preview-chips{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  min-height:22px;
+}
+.job-match-preview .tag{
+  font-size:10px;
+  padding:4px 7px;
+}
+.job-match-empty{
+  font-size:10px;
+  color:var(--muted);
+}
