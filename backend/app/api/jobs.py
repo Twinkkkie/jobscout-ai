@@ -36,6 +36,7 @@ async def list_jobs(
         .where(
             JobMatch.user_id == user.id,
             JobMatch.score >= 45,
+            JobMatch.is_final.is_(True),
             Job.is_active.is_(True),
         )
         .order_by(JobMatch.score.desc(), Job.published_at.desc().nullslast(), Job.collected_at.desc())
@@ -100,6 +101,7 @@ async def list_matches(
         .where(
             JobMatch.user_id == user.id,
             JobMatch.score >= min_score,
+            JobMatch.is_final.is_(True),
             Job.is_active.is_(True),
         )
         .order_by(JobMatch.score.desc(), Job.published_at.desc().nullslast())
@@ -169,6 +171,7 @@ async def analyze_match(
     match.verdict = scored["verdict"]
     match.ai_explanation = explanation
     match.matching_version = MATCHING_VERSION
+    match.is_final = has_current_ai if settings.openai_api_key else True
     await db.commit()
     await db.refresh(match)
 
