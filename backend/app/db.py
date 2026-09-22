@@ -59,6 +59,12 @@ async def create_schema() -> None:
             text("ALTER TABLE job_matches ADD COLUMN IF NOT EXISTS matching_version INTEGER NOT NULL DEFAULT 0")
         )
         await connection.execute(
+            text("ALTER TABLE job_matches ADD COLUMN IF NOT EXISTS is_final BOOLEAN NOT NULL DEFAULT FALSE")
+        )
+        await connection.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_job_matches_is_final ON job_matches (is_final)")
+        )
+        await connection.execute(
             text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS ai_analysis JSONB NOT NULL DEFAULT '{}'::jsonb")
         )
         await connection.execute(
