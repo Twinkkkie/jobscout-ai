@@ -5,7 +5,7 @@ from app.models import Job
 from app.services.ai_utils import ask_openai_json, clean_string_list
 
 
-VACANCY_ANALYSIS_VERSION = 3
+VACANCY_ANALYSIS_VERSION = 4
 
 ALLOWED_ROLE_FAMILIES = {
     "ai", "python", "backend", "software", "ml", "data", "frontend",
@@ -119,11 +119,18 @@ requirements. Return ONE valid JSON object and no markdown:
 }}
 
 Rules:
-- Be exhaustive for technical requirements: extract EVERY explicitly named language,
-  framework, library, database, cloud service, platform, API, protocol, DevOps tool,
-  AI/ML tool, testing tool, and engineering capability mentioned in the vacancy.
-- Put explicitly required/core items in must_have_skills.
-- Put preferred/bonus/"nice to have" items in nice_to_have_skills.
+- Be exhaustive for CONCRETE technical requirements: explicitly named languages,
+  frameworks, libraries, databases, cloud services, platforms, APIs, protocols,
+  DevOps/testing tools, AI/ML tools, and specific engineering techniques.
+- Put explicitly required/core concrete skills in must_have_skills.
+- Put preferred/bonus concrete skills in nice_to_have_skills.
+- Keep broad domains such as "artificial intelligence", "software engineering",
+  "AI tools and models", or general work activities such as "testing/adopting new
+  AI tools" in domain/responsibilities, NOT in skill gaps by themselves.
+- A broad phrase may appear in must_have_skills only when the vacancy explicitly
+  requires prior experience/proficiency in that capability.
+- "Prompt engineering", RAG, agents, model evaluation, Python, Docker, etc. are
+  concrete technical capabilities and should remain skills when stated.
 - Do not silently omit a named technology because it seems secondary.
 - Preserve uncommon product/platform names exactly when possible.
 - Do not include generic soft skills as technical skills.
@@ -190,10 +197,12 @@ Return ONE valid JSON object and no markdown with this exact outer shape:
   ]
 }}
 
-Keep each item concise, but be exhaustive for named technical requirements. Extract every
-explicitly named language, framework, library, database, cloud service, platform, API,
-protocol, DevOps/testing tool, and AI/ML technology, classifying each as must-have or
-nice-to-have. Do not omit uncommon or secondary named technologies.
+Keep each item concise, but be exhaustive for concrete named technical requirements.
+Extract every explicitly named language, framework, library, database, cloud service,
+platform, API, protocol, DevOps/testing tool, AI/ML technology, and specific technique.
+Do NOT turn broad domains ("artificial intelligence", "software engineering") or generic
+work activities ("testing/adopting new AI tools and models") into skill gaps unless the
+vacancy explicitly demands prior proficiency/experience in that capability.
 
 <VACANCIES>
 {chr(10).join(chr(10) + item for item in payload_parts)}
