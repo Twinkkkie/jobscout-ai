@@ -128,7 +128,7 @@ async def ensure_current_matches(
         select(JobMatch.id)
         .where(
             JobMatch.user_id == profile.user_id,
-            (JobMatch.matching_version != MATCHING_VERSION) | (JobMatch.is_final.is_(False)),
+            JobMatch.matching_version != MATCHING_VERSION,
         )
         .limit(1)
     )
