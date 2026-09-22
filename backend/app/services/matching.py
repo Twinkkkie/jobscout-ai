@@ -2,7 +2,7 @@ import re
 
 from app.models import CandidateProfile, Job
 
-MATCHING_VERSION = 6
+MATCHING_VERSION = 7
 
 STOPWORDS = {
     "and", "the", "with", "for", "you", "your", "our", "are", "will", "from",
