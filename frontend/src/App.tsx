@@ -247,7 +247,14 @@ function App() {
       let response: Response;
       try {
         response = await fetch(`${API}${path}`, { ...options, headers });
-      } catch {
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          throw new Error(
+            locale === "en"
+              ? "The request timed out. Please try again."
+              : "Превышено время ожидания ответа. Попробуй еще раз."
+          );
+        }
         throw new Error(
           locale === "en"
             ? "Cannot reach the JobScout API. Check that Docker/API is running."
@@ -1479,13 +1486,16 @@ function ResumePage({
     setUploadError("");
     const data=new FormData();
     data.append("file",file);
+    const controller=new AbortController();
+    const timeoutId=window.setTimeout(()=>controller.abort(),30000);
     try{
-      const uploaded=await api("/resumes",{method:"POST",body:data});
+      const uploaded=await api("/resumes",{method:"POST",body:data,signal:controller.signal});
       setResult(uploaded);
-      setBusy(false);
       void onUploaded();
     }catch(err){
       setUploadError(err instanceof Error?err.message:"Resume parsing failed");
+    }finally{
+      window.clearTimeout(timeoutId);
       setBusy(false);
     }
   };
