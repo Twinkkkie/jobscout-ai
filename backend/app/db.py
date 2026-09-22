@@ -53,6 +53,9 @@ async def create_schema() -> None:
             text("ALTER TABLE jobs ALTER COLUMN remote_region TYPE TEXT")
         )
         await connection.execute(
+            text("ALTER TABLE jobs ALTER COLUMN url TYPE TEXT")
+        )
+        await connection.execute(
             text("ALTER TABLE job_matches ADD COLUMN IF NOT EXISTS matching_version INTEGER NOT NULL DEFAULT 0")
         )
         await connection.execute(
