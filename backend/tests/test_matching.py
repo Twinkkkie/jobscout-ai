@@ -356,3 +356,64 @@ def test_broad_ai_capabilities_use_full_candidate_evidence() -> None:
     assert "testing and adopting new ai tools and models" not in gap_keys
     assert "prompt engineering" not in gap_keys
     assert any(skill.lower() == "prompt engineering" for skill in scored["matching_skills"])
+
+
+
+def test_ai_company_suffix_does_not_turn_cco_into_ai_engineering_match() -> None:
+    candidate = profile()
+    job = Job(
+        source="test",
+        external_id="11",
+        title="Chief Commercial Officer (CCO) | AI Product Company",
+        company="Newbridge",
+        location="Remote",
+        remote_region="Worldwide",
+        description="Lead commercial strategy, revenue, partnerships and go-to-market.",
+        tags=["ai", "commercial", "leadership"],
+        salary_min=None,
+        salary_max=None,
+        currency="USD",
+        url="https://example.com/job11",
+        ai_analysis={
+            "ai_enriched": True,
+            "analysis_version": 4,
+            "role_family": "ai",
+            "seniority": "lead",
+            "must_have_skills": [],
+            "nice_to_have_skills": [],
+            "years_required": None,
+        },
+    )
+
+    scored = score_job(candidate, job)
+
+    assert scored["score"] <= 25
+    assert scored["verdict"] == "skip"
+    assert scored["matching_skills"] == []
+    assert any("non-technical commercial/business role" in reason for reason in scored["reasons"])
+
+
+def test_no_technical_requirements_cannot_create_high_confidence_match() -> None:
+    candidate = profile()
+    candidate.seniority_levels = []
+    job = Job(
+        source="test",
+        external_id="12",
+        title="AI Developer",
+        company="Example",
+        location="Remote",
+        remote_region="Worldwide",
+        description="Join our AI product company and work with the team.",
+        tags=["ai", "remote"],
+        salary_min=None,
+        salary_max=None,
+        currency="USD",
+        url="https://example.com/job12",
+    )
+
+    scored = score_job(candidate, job)
+
+    assert scored["score"] <= 64
+    assert scored["verdict"] != "apply"
+    assert scored["matching_skills"] == []
+    assert scored["skill_gaps"] == []
