@@ -38,6 +38,24 @@ async def create_schema() -> None:
             text("ALTER TABLE candidate_profiles ADD COLUMN IF NOT EXISTS ai_profile_updated_at TIMESTAMPTZ")
         )
         await connection.execute(
+            text("ALTER TABLE jobs ALTER COLUMN external_id TYPE TEXT")
+        )
+        await connection.execute(
+            text("ALTER TABLE jobs ALTER COLUMN title TYPE TEXT")
+        )
+        await connection.execute(
+            text("ALTER TABLE jobs ALTER COLUMN company TYPE TEXT")
+        )
+        await connection.execute(
+            text("ALTER TABLE jobs ALTER COLUMN location TYPE TEXT")
+        )
+        await connection.execute(
+            text("ALTER TABLE jobs ALTER COLUMN remote_region TYPE TEXT")
+        )
+        await connection.execute(
+            text("ALTER TABLE job_matches ADD COLUMN IF NOT EXISTS matching_version INTEGER NOT NULL DEFAULT 0")
+        )
+        await connection.execute(
             text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS ai_analysis JSONB NOT NULL DEFAULT '{}'::jsonb")
         )
         await connection.execute(
