@@ -1457,17 +1457,17 @@ function ResumePage({
     try{
       const uploaded=await api("/resumes",{method:"POST",body:data});
       setResult(uploaded);
-      await onUploaded();
+      setBusy(false);
+      void onUploaded();
     }catch(err){
-      setUploadError(err instanceof Error?err.message:"Resume analysis failed");
-    }finally{
+      setUploadError(err instanceof Error?err.message:"Resume parsing failed");
       setBusy(false);
     }
   };
   const parsed=result?.extracted_profile;
   return (
     <>
-      <div className="page-heading"><div><span className="eyebrow">AI PROFILE</span><h1>{t.uploadResume}</h1><p>{locale==="en"?"Choose a resume, then click Upload & analyze. The extracted profile will appear on the right before you continue.":"Выбери резюме и нажми «Загрузить и проанализировать». Справа появится результат разбора, и только потом можно перейти в профиль."}</p></div></div>
+      <div className="page-heading"><div><span className="eyebrow">RESUME PARSER</span><h1>{t.uploadResume}</h1><p>{locale==="en"?"Upload a resume to parse skills, target roles and experience immediately. You can review and edit everything before matching.":"Загрузи резюме — навыки, целевые роли и опыт распарсятся сразу. Перед мэтчингом все можно проверить и отредактировать."}</p></div></div>
       <div className="resume-layout">
         <section className="panel upload-zone">
           <Upload size={42}/>
@@ -1490,17 +1490,17 @@ function ResumePage({
             </span>
           </div>
           <button className="primary-button" disabled={!file||busy} onClick={submit}>
-            {busy?(locale==="en"?"Analyzing…":"Анализируем…"):t.upload}
+            {busy?(locale==="en"?"Parsing…":"Разбираем…"):t.upload}
           </button>
           {uploadError&&<span className="save-error">{uploadError}</span>}
         </section>
         <section className="panel parsing-preview">
           <Sparkles size={22}/>
           <div className="parsing-title-row">
-            <h3>{locale==="en"?"Resume analysis preview":"Предпросмотр разбора резюме"}</h3>
+            <h3>{locale==="en"?"Resume parsing preview":"Предпросмотр парсинга резюме"}</h3>
             {result&&<span className="analysis-badge">{locale==="en"?"Parsed":"Разобрано"}</span>}
           </div>
-          {!result&&<p>{locale==="en"?"Nothing has been analyzed yet. Choose a file and click Upload & analyze.":"Анализ еще не запускался. Выбери файл и нажми «Загрузить и проанализировать»."}</p>}
+          {!result&&<p>{locale==="en"?"Nothing has been parsed yet. Choose a file and upload it.":"Резюме еще не разобрано. Выбери файл и загрузи его."}</p>}
           {parsed&&(
             <div className="parsed-profile">
               <div>
