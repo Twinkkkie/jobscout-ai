@@ -73,7 +73,7 @@ class Job(Base):
     salary_min: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     salary_max: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     currency: Mapped[str] = mapped_column(String(16), default="USD")
-    url: Mapped[str] = mapped_column(String(1200))
+    url: Mapped[str] = mapped_column(Text())
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
