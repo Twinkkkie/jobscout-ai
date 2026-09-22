@@ -20,7 +20,7 @@ async def explain_match_ai(
     raw_analysis = job.ai_analysis or {}
     ai_enriched = bool(
         raw_analysis.get("ai_enriched")
-        and raw_analysis.get("analysis_version") == 3
+        and raw_analysis.get("analysis_version") == 4
     )
     analysis = raw_analysis if ai_enriched else {}
 
